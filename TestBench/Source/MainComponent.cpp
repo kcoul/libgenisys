@@ -93,7 +93,19 @@ MainComponent::MainComponent()
     meter.setMeterSource (&meterSource);
     addAndMakeVisible (meter);
 
-    setAudioChannels(2,2);
+#ifdef __linux__
+    auto audioError = deviceManager.initialiseWithDefaultDevices(1, 2);
+    jassert (audioError.isEmpty());
+
+    auto setup = deviceManager.getAudioDeviceSetup();
+    setup.bufferSize = 2048;
+    deviceManager.setAudioDeviceSetup(setup, true);
+
+    deviceManager.addAudioCallback (&audioSourcePlayer);
+    audioSourcePlayer.setSource (this);
+#else
+    setAudioChannels(1,2);
+#endif
 
     auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
@@ -132,6 +144,7 @@ void MainComponent::enablePassthroughButtonClicked()
 
 MainComponent::~MainComponent()
 {
+    inputResampler.release();
     shutdownAudio();
     meter.setLookAndFeel (nullptr);
 }
@@ -158,7 +171,7 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     if (currentBlockSize != samplesPerBlockExpected)
     {
         currentBlockSize = samplesPerBlockExpected;
-        resamplerBuffer = juce::AudioBuffer<float>(1, currentBlockSize);
+        resamplerBuffer = std::make_unique<juce::AudioBuffer<float>>(1, currentBlockSize);
     }
 
     if (currentSampleRate != sampleRate)
@@ -185,13 +198,13 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
 
             while (inputResampler.get()->samplesReady() >= currentBlockSize)
             {
-                inputResampler.get()->popAudioBuffer(resamplerBuffer);
+                inputResampler.get()->popAudioBuffer(*resamplerBuffer.get());
 
                 const juce::ScopedLock sl (writerLock);
 
                 if (activeWriter.load() != nullptr)
                 {
-                    activeWriter.load()->write(resamplerBuffer.getArrayOfReadPointers(), currentBlockSize);
+                    activeWriter.load()->write(resamplerBuffer.get()->getArrayOfReadPointers(), currentBlockSize);
                 }
             }
         }
@@ -291,8 +304,8 @@ void MainComponent::recordButtonClicked()
     if (lastRecording.existsAsFile())
         lastRecording.deleteFile();
 
-    currentlyRecording = true;
     startRecording (lastRecording);
+    currentlyRecording = true;
 }
 
 void MainComponent::stopButtonClicked()

@@ -65,7 +65,7 @@ private:
     foleys::LevelMeterSource meterSource;
 
     //DSP
-    juce::AudioBuffer<float> resamplerBuffer;
+    std::unique_ptr<juce::AudioBuffer<float>> resamplerBuffer;
     std::unique_ptr<gin::ResamplingFifo> inputResampler;
     const int targetSampleRate = 16000;
     const int maxInputSampleRate = 96000;

@@ -31,7 +31,7 @@
 #undef min
 #endif
 
-#if LINUX || _WIN32
+#if __linux__ || _WIN32
 #include <limits>
 #endif
 

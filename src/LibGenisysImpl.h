@@ -3,6 +3,7 @@
 #include "LibGenisysAPI.h"
 #include "deepspeech.h"
 #include <string>
+#include <sstream>
 #include <iostream>
 #include "gin/gin_resamplingfifo.h"
 #include "wavio.h"
@@ -27,6 +28,7 @@ class LibGenisysImpl
 {
 public:
     LibGenisysImpl();
+    ~LibGenisysImpl();
     LibGenisysStatus initialize(int sampleRate);
     std::string processFloat(float* buffer, int numSamples);
     std::string processNativeFloat(float* buffer, int numSamples);

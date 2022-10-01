@@ -8,6 +8,7 @@ CPMAddPackage(
 #LARGE FILES NOT CONTAINED IN REPO BUT AVAILABLE FROM 0.9.3 Release Page:
 #https://github.com/mozilla/DeepSpeech/releases/tag/v0.9.3
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm")
+    message("Downloading DeepSpeech PBMM file to LFS folder")
     file(DOWNLOAD
             https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.pbmm
             ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm
@@ -15,6 +16,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm")
 endif()
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.tflite)
+    message("Downloading DeepSpeech tflite file to LFS folder")
     file(DOWNLOAD
             https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.tflite
             ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.tflite
@@ -22,6 +24,7 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.tflite)
 endif()
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.scorer)
+    message("Downloading DeepSpeech scorer file to LFS folder")
     file(DOWNLOAD
             https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.scorer
             ${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.scorer
