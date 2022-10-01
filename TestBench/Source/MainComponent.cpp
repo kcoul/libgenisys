@@ -103,18 +103,21 @@ MainComponent::MainComponent()
 void MainComponent::loadAndRenderTestFile(juce::File testFile)
 {
     juce::AudioFormatReader* reader = formatManager.createReaderFor(lastRecording);
-    lastRecordingSize = sizeof(unsigned char) * reader->lengthInSamples * 2;
+    if (reader)
+    {
+        lastRecordingSize = sizeof(unsigned char) * reader->lengthInSamples * 2;
 
-    loadedAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
-    reader->read(&loadedAudioBuffer, 0, reader->lengthInSamples,
-                 0, true, true);
+        loadedAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
+        reader->read(&loadedAudioBuffer, 0, reader->lengthInSamples,
+                     0, true, true);
 
-    newSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);   // [11]
-    transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
+        newSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);   // [11]
+        transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
 
-    auto result = LibGenisysProcessNativePath(libGenisysInstance, testFile.getFullPathName().toStdString());
-    if (!result.empty())
-        textDisplay.setText(juce::String(result), juce::dontSendNotification);
+        auto result = LibGenisysProcessNativePath(libGenisysInstance, testFile.getFullPathName().toStdString());
+        if (!result.empty())
+            textDisplay.setText(juce::String(result), juce::dontSendNotification);
+    }
 }
 
 void MainComponent::quitCPanelButtonClicked()
@@ -329,7 +332,7 @@ void MainComponent::startRecording(const juce::File& file)
         {
             juce::WavAudioFormat wavFormat;
 
-            if (auto writer = wavFormat.createWriterFor (fileStream.get(), currentSampleRate, 1, 16, {}, 0))
+            if (auto writer = wavFormat.createWriterFor (fileStream.get(), targetSampleRate, 1, 16, {}, 0))
             {
                 fileStream.release();
 

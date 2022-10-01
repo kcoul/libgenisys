@@ -58,13 +58,13 @@ if(APPLE)
             IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dylib")
 elseif(WIN32)
     set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dll")
+            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
     set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.lib")
+            IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.lib")
 
     #Copy DLLs to TestBench build directory
-    set(LIBRARY_FILE "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dll")
-    set(LIBRARY_FILE_NAME "libGenisysDynamic.dll")
+    set(LIBRARY_FILE "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
+    set(LIBRARY_FILE_NAME "GenisysDynamic.dll")
     add_custom_command(TARGET ${TargetName} POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy
             "${LIBRARY_FILE}"

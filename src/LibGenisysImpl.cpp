@@ -315,6 +315,9 @@ std::vector<meta_word> LibGenisysImpl::CandidateTranscriptToWords(const Candidat
 
 std::string LibGenisysImpl::CandidateTranscriptToJSON(const CandidateTranscript *transcript)
 {
+#ifdef WIN32
+    return "";
+#else
     std::ostringstream out_string;
 
     std::vector<meta_word> words = CandidateTranscriptToWords(transcript);
@@ -335,10 +338,14 @@ std::string LibGenisysImpl::CandidateTranscriptToJSON(const CandidateTranscript 
     out_string << "]";
 
     return out_string.str();
+#endif
 }
 
 char* LibGenisysImpl::MetadataToJSON(Metadata* result)
 {
+#ifdef WIN32
+    return "";
+#else
     std::ostringstream out_string;
     out_string << "{\n";
 
@@ -372,6 +379,7 @@ char* LibGenisysImpl::MetadataToJSON(Metadata* result)
     out_string << "\n}\n";
 
     return strdup(out_string.str().c_str());
+#endif
 }
 
 std::vector<std::string> LibGenisysImpl::SplitStringOnDelim(std::string in_string, std::string delim)
