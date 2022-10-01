@@ -54,8 +54,8 @@ target_compile_definitions(${TargetName} PRIVATE
 
 add_library(LibGenisys SHARED IMPORTED)
 if(APPLE)
-set_property(TARGET LibGenisys PROPERTY
-        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.so")
+    set_property(TARGET LibGenisys PROPERTY
+            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dylib")
 elseif(WIN32)
     set_property(TARGET LibGenisys PROPERTY
             IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dll")
@@ -83,6 +83,9 @@ elseif(UNIX AND NOT APPLE)
     set_property(TARGET LibGenisys PROPERTY
             IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.so")
 endif()
+
+target_compile_definitions(${TargetName} PUBLIC
+        JUCE_DISABLE_JUCE_VERSION_PRINTING=1)
 
 #=====================
 #TARGET_LINK_LIBRARIES

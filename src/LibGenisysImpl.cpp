@@ -9,13 +9,12 @@ LibGenisysImpl::LibGenisysImpl()
         return;
     }
 
-    //TODO: Enable if needed
-    //status = DS_EnableExternalScorer(ctx, SCORER_PATH);
-    //if (status != 0)
-    //{
+    status = DS_EnableExternalScorer(ctx, SCORER_PATH);
+    if (status != 0)
+    {
         /*TODO: Report failure reason */
-    //    return;
-    //}
+        return;
+    }
 
     if (hot_words)
     {
@@ -50,7 +49,7 @@ LibGenisysStatus LibGenisysImpl::initialize(int sampleRate)
     const int resamplerMaxSamples = maxInputSampleRate * 2;
 
     if(!inputResampler)
-        inputResampler = std::make_unique<gin::ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
+        inputResampler = std::make_unique<ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
     else if (currentInputSampleRate != sampleRate)
     {
         currentInputSampleRate = sampleRate;
@@ -73,6 +72,7 @@ std::string LibGenisysImpl::processNativeFloat(float* buffer, int numSamples)
 
 std::string LibGenisysImpl::processPath(std::string path)
 {
+
     return "";
 }
 
@@ -98,6 +98,7 @@ ds_audio_buffer LibGenisysImpl::GetAudioBuffer(std::string path)
     }
 
     res.buffer_size = inputFile.getHeader().lengthInBytes;
+    res.buffer = (char*)malloc(sizeof(char) * res.buffer_size);
 
     inputFile.readData(reinterpret_cast<unsigned char*>(res.buffer), res.buffer_size);
     return res;
@@ -130,124 +131,6 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
     }
 
     return "";
-}
-
-char* LibGenisysImpl::CandidateTranscriptToString(const CandidateTranscript* transcript)
-{
-    std::string retval = "";
-    for (int i = 0; i < transcript->num_tokens; i++)
-    {
-        const TokenMetadata& token = transcript->tokens[i];
-        retval += token.text;
-    }
-    return strdup(retval.c_str());
-}
-
-std::vector<meta_word> LibGenisysImpl::CandidateTranscriptToWords(const CandidateTranscript* transcript)
-{
-    std::vector<meta_word> word_list;
-    std::string word = "";
-    float word_start_time = 0;
-
-    // Loop through each token
-    for (int i = 0; i < transcript->num_tokens; i++)
-    {
-        const TokenMetadata& token = transcript->tokens[i];
-
-        // Append token to word if it's not a space
-        if (strcmp(token.text, u8" ") != 0)
-        {
-            // Log the start time of the new word
-            if (word.length() == 0)
-            {
-                word_start_time = token.start_time;
-            }
-            word.append(token.text);
-        }
-
-        // Word boundary is either a space or the last token in the array
-        if (strcmp(token.text, u8" ") == 0 || i == transcript->num_tokens-1)
-        {
-            float word_duration = token.start_time - word_start_time;
-
-            if (word_duration < 0)
-            {
-                word_duration = 0;
-            }
-
-            meta_word w;
-            w.word = word;
-            w.start_time = word_start_time;
-            w.duration = word_duration;
-            word_list.push_back(w);
-
-            // Reset
-            word = "";
-            word_start_time = 0;
-        }
-    }
-    return word_list;
-}
-
-std::string LibGenisysImpl::CandidateTranscriptToJSON(const CandidateTranscript *transcript)
-{
-    std::ostringstream out_string;
-
-    std::vector<meta_word> words = CandidateTranscriptToWords(transcript);
-
-    out_string << R"("metadata":{"confidence":)" << transcript->confidence << R"(},"words":[)";
-
-    for (int i = 0; i < words.size(); i++)
-    {
-        meta_word w = words[i];
-        out_string << R"({"word":")" << w.word << R"(","time":)" << w.start_time << R"(,"duration":)" << w.duration << "}";
-
-        if (i < words.size() - 1)
-        {
-            out_string << ",";
-        }
-    }
-
-    out_string << "]";
-
-    return out_string.str();
-}
-
-char* LibGenisysImpl::MetadataToJSON(Metadata* result)
-{
-    std::ostringstream out_string;
-    out_string << "{\n";
-
-    for (int j=0; j < result->num_transcripts; ++j)
-    {
-        const CandidateTranscript *transcript = &result->transcripts[j];
-
-        if (j == 0)
-        {
-            out_string << CandidateTranscriptToJSON(transcript);
-
-            if (result->num_transcripts > 1)
-            {
-                out_string << ",\n" << R"("alternatives")" << ":[\n";
-            }
-        }
-        else
-        {
-            out_string << "{" << CandidateTranscriptToJSON(transcript) << "}";
-            if (j < result->num_transcripts - 1)
-            {
-                out_string << ",\n";
-            }
-            else
-            {
-                out_string << "\n]";
-            }
-        }
-    }
-
-    out_string << "\n}\n";
-
-    return strdup(out_string.str().c_str());
 }
 
 ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize, bool extended_output, bool json_output)
@@ -371,6 +254,124 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
     res.cpu_time_overall = ((double) (ds_end_infer - ds_start_time)) / CLOCKS_PER_SEC;
 
     return res;
+}
+
+char* LibGenisysImpl::CandidateTranscriptToString(const CandidateTranscript* transcript)
+{
+    std::string retval = "";
+    for (int i = 0; i < transcript->num_tokens; i++)
+    {
+        const TokenMetadata& token = transcript->tokens[i];
+        retval += token.text;
+    }
+    return strdup(retval.c_str());
+}
+
+std::vector<meta_word> LibGenisysImpl::CandidateTranscriptToWords(const CandidateTranscript* transcript)
+{
+    std::vector<meta_word> word_list;
+    std::string word = "";
+    float word_start_time = 0;
+
+    // Loop through each token
+    for (int i = 0; i < transcript->num_tokens; i++)
+    {
+        const TokenMetadata& token = transcript->tokens[i];
+
+        // Append token to word if it's not a space
+        if (strcmp(token.text, u8" ") != 0)
+        {
+            // Log the start time of the new word
+            if (word.length() == 0)
+            {
+                word_start_time = token.start_time;
+            }
+            word.append(token.text);
+        }
+
+        // Word boundary is either a space or the last token in the array
+        if (strcmp(token.text, u8" ") == 0 || i == transcript->num_tokens-1)
+        {
+            float word_duration = token.start_time - word_start_time;
+
+            if (word_duration < 0)
+            {
+                word_duration = 0;
+            }
+
+            meta_word w;
+            w.word = word;
+            w.start_time = word_start_time;
+            w.duration = word_duration;
+            word_list.push_back(w);
+
+            // Reset
+            word = "";
+            word_start_time = 0;
+        }
+    }
+    return word_list;
+}
+
+std::string LibGenisysImpl::CandidateTranscriptToJSON(const CandidateTranscript *transcript)
+{
+    std::ostringstream out_string;
+
+    std::vector<meta_word> words = CandidateTranscriptToWords(transcript);
+
+    out_string << R"("metadata":{"confidence":)" << transcript->confidence << R"(},"words":[)";
+
+    for (int i = 0; i < words.size(); i++)
+    {
+        meta_word w = words[i];
+        out_string << R"({"word":")" << w.word << R"(","time":)" << w.start_time << R"(,"duration":)" << w.duration << "}";
+
+        if (i < words.size() - 1)
+        {
+            out_string << ",";
+        }
+    }
+
+    out_string << "]";
+
+    return out_string.str();
+}
+
+char* LibGenisysImpl::MetadataToJSON(Metadata* result)
+{
+    std::ostringstream out_string;
+    out_string << "{\n";
+
+    for (int j=0; j < result->num_transcripts; ++j)
+    {
+        const CandidateTranscript *transcript = &result->transcripts[j];
+
+        if (j == 0)
+        {
+            out_string << CandidateTranscriptToJSON(transcript);
+
+            if (result->num_transcripts > 1)
+            {
+                out_string << ",\n" << R"("alternatives")" << ":[\n";
+            }
+        }
+        else
+        {
+            out_string << "{" << CandidateTranscriptToJSON(transcript) << "}";
+            if (j < result->num_transcripts - 1)
+            {
+                out_string << ",\n";
+            }
+            else
+            {
+                out_string << "\n]";
+            }
+        }
+    }
+
+    out_string << "\n}\n";
+
+    return strdup(out_string.str().c_str());
 }
 
 std::vector<std::string> LibGenisysImpl::SplitStringOnDelim(std::string in_string, std::string delim)

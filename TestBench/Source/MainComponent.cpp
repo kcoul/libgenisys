@@ -25,7 +25,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(quitCPanelLabel);
     quitCPanelLabel.setVisible(false);
 
-    quitCPanelButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
+    quitCPanelButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
     quitCPanelButton.onClick = [] { quitCPanelButtonClicked(); };
     quitCPanelButton.setToggleState(true, juce::dontSendNotification);
     addAndMakeVisible(quitCPanelButton);
@@ -52,7 +52,7 @@ MainComponent::MainComponent()
     logoImageComponent.onClick = [this] { settingsButtonClicked(); };
     addAndMakeVisible(logoImageComponent);
 
-    recordButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
+    recordButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
         recordButton.onClick = [this] { recordButtonClicked(); };
     addAndMakeVisible(recordButton);
 
@@ -60,7 +60,7 @@ MainComponent::MainComponent()
     recordButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(recordButtonLabel);
 
-    stopButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
+    stopButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
         stopButton.onClick = [this] { stopButtonClicked(); };
     stopButton.setEnabled(false);
     addAndMakeVisible(stopButton);
@@ -69,7 +69,7 @@ MainComponent::MainComponent()
     stopButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(stopButtonLabel);
 
-    playButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
+    playButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
         playButton.onClick = [this] { playButtonClicked(); };
     addAndMakeVisible(playButton);
 
@@ -95,9 +95,9 @@ MainComponent::MainComponent()
 
     setAudioChannels(2,2);
 
-    //auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
-    //lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
-    //loadAndRenderTestFile(lastRecording);
+    auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
+    lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
+    loadAndRenderTestFile(lastRecording);
 }
 
 void MainComponent::loadAndRenderTestFile(juce::File testFile)
@@ -138,34 +138,80 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
 {
     meterSource.resize (1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
 
-    LibGenisysInitialize(libGenisysInstance, sampleRate);
+    if (sampleRate < targetSampleRate)
+    {
+        fprintf(stderr, "Warning: original sample rate (%d) is lower than %dkHz. "
+                        "Up-sampling might produce erratic speech recognition.\n", targetSampleRate, (int)sampleRate);
+    }
 
     const int resamplerBlockSize = samplesPerBlockExpected;
     const int resamplerMaxSamples = maxInputSampleRate * 2;
 
+    inputResampler = std::make_unique<gin::ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
+
+    if (currentBlockSize != samplesPerBlockExpected || currentSampleRate != sampleRate)
+        meterSource.resize (1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
+
     if (currentBlockSize != samplesPerBlockExpected)
     {
+        currentBlockSize = samplesPerBlockExpected;
         resamplerBuffer = juce::AudioBuffer<float>(1, currentBlockSize);
     }
 
-    if (!inputResampler)
-        inputResampler = std::make_unique<gin::ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
-    else if (currentSampleRate != sampleRate)
+    if (currentSampleRate != sampleRate)
     {
+        currentSampleRate = sampleRate;
         inputResampler->setResamplingRatio(currentSampleRate, targetSampleRate);
         inputResampler->reset();
-    }
 
-    if (currentBlockSize != samplesPerBlockExpected || currentSampleRate != sampleRate)
-    {
-        currentBlockSize = samplesPerBlockExpected;
-        currentSampleRate = sampleRate;
-
-        meterSource.resize(1, static_cast<int>(currentSampleRate * 0.1 / currentBlockSize));
+        LibGenisysInitialize(libGenisysInstance, sampleRate);
     }
 
     transportSource.prepareToPlay (samplesPerBlockExpected, sampleRate);
+
+    meterSource.resize (1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
 }
+
+    void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
+    {
+        meterSource.measureBlock (*bufferToFill.buffer);
+
+        if (currentlyRecording)
+        {
+            inputResampler.get()->pushAudioBuffer(*bufferToFill.buffer);
+
+            while (inputResampler.get()->samplesReady() >= currentBlockSize)
+            {
+                inputResampler.get()->popAudioBuffer(resamplerBuffer);
+
+                const juce::ScopedLock sl (writerLock);
+
+                if (activeWriter.load() != nullptr)
+                {
+                    activeWriter.load()->write(resamplerBuffer.getArrayOfReadPointers(), currentBlockSize);
+                }
+            }
+        }
+
+        if (currentlyPlaying)
+        {
+            transportSource.getNextAudioBlock(bufferToFill);
+            if (transportSource.hasStreamFinished())
+            {
+                juce::MessageManager::callAsync(
+                        [=] ()
+                        {
+                            transportSource.setPosition(0);
+                            recordButton.setEnabled(true);
+                            stopButton.setEnabled(false);
+                            playButton.setEnabled(true);
+                        }
+                );
+            }
+        }
+        else if (!enablePassthrough)
+            bufferToFill.clearActiveBufferRegion();
+    }
 
 void MainComponent::releaseResources()
 {
@@ -230,47 +276,6 @@ void MainComponent::resized()
                                      (thirdOfMainHeight - labelHeight)/2, thirdOfWidth/2, labelHeight/2);
 }
 
-void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
-{
-    meterSource.measureBlock (*bufferToFill.buffer);
-
-    if (currentlyRecording)
-    {
-        inputResampler.get()->pushAudioBuffer(*bufferToFill.buffer);
-
-        while (inputResampler.get()->samplesReady() >= currentBlockSize)
-        {
-            inputResampler.get()->popAudioBuffer(resamplerBuffer);
-
-            const juce::ScopedLock sl (writerLock);
-
-            if (activeWriter.load() != nullptr)
-            {
-                activeWriter.load()->write(resamplerBuffer.getArrayOfReadPointers(), currentBlockSize);
-            }
-        }
-    }
-
-    if (currentlyPlaying)
-    {
-        transportSource.getNextAudioBlock(bufferToFill);
-        if (transportSource.hasStreamFinished())
-        {
-            juce::MessageManager::callAsync(
-                    [=] ()
-                    {
-                        transportSource.setPosition(0);
-                        recordButton.setEnabled(true);
-                        stopButton.setEnabled(false);
-                        playButton.setEnabled(true);
-                    }
-                    );
-        }
-    }
-    else if (!enablePassthrough)
-        bufferToFill.clearActiveBufferRegion();
-}
-
 void MainComponent::recordButtonClicked()
 {
     recordButton.setEnabled(false);
@@ -292,7 +297,6 @@ void MainComponent::stopButtonClicked()
     if (currentlyRecording)
     {
         stopRecordingAndConvert();
-        currentlyRecording = false;
     }
     if (currentlyPlaying)
     {
@@ -350,7 +354,9 @@ void MainComponent::stopRecordingAndConvert()
     currentlyRecording = false;
     stop();
 
-    LibGenisysProcessNativePath(libGenisysInstance, lastRecording.getFullPathName().toStdString());
+    auto result = LibGenisysProcessNativePath(libGenisysInstance, lastRecording.getFullPathName().toStdString());
+    if (!result.empty())
+        textDisplay.setText(juce::String(result), juce::dontSendNotification);
 }
 
 void MainComponent::settingsButtonClicked()

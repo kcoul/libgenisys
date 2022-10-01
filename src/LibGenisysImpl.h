@@ -4,7 +4,7 @@
 #include "deepspeech.h"
 #include <string>
 #include <iostream>
-#include <gin_dsp/gin_dsp.h>
+#include "gin/gin_resamplingfifo.h"
 #include "wavio.h"
 
 typedef struct {
@@ -34,7 +34,7 @@ public:
     std::string processNativePath(std::string path);
 private:
     //Resampler
-    std::unique_ptr<gin::ResamplingFifo> inputResampler;
+    std::unique_ptr<ResamplingFifo> inputResampler;
     const int targetSampleRate = 16000;
     const int maxInputSampleRate = 96000;
     int currentInputSampleRate;
@@ -47,10 +47,12 @@ private:
     std::string ProcessFile(ModelState* context, std::string path, bool show_times);
     ds_result LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize, bool extended_output, bool json_output);
 
-    char* audio = NULL;
-
     const char* hot_words = "genesis:5";
     //float max_boost = 20.0f; //See: https://deepspeech.readthedocs.io/en/master/HotWordBoosting-Examples.html
+    /*
+     * Overly positive boost values may cause a word following the boosted hot-word to be split into separate letters.
+     * This problem is related to the scorer structure and currently only way to avoid it is to tune boost to a lower value.
+     */
 
     bool extended_metadata = false;
     bool json_output = false;

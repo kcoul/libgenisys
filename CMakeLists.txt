@@ -34,14 +34,15 @@ find_package(Gin)
 # 4. Main build targets
 #
 add_library(libGenisysObjects OBJECT src/LibGenisysAPI.cpp src/LibGenisysAPI.h src/LibGenisysImpl.cpp src/LibGenisysImpl.h)
-add_library(libGenisysDynamic SHARED)
-target_link_libraries(libGenisysDynamic PUBLIC libGenisysObjects)
-add_library(libGenisysStatic STATIC)
-target_link_libraries(libGenisysStatic PUBLIC libGenisysObjects)
+add_library(GenisysDynamic SHARED)
+target_link_libraries(GenisysDynamic PUBLIC libGenisysObjects)
+add_library(GenisysStatic STATIC)
+target_link_libraries(GenisysStatic PUBLIC libGenisysObjects)
 target_compile_features(libGenisysObjects PUBLIC cxx_std_14)
 
 target_include_directories(libGenisysObjects PUBLIC
 		"${DeepSpeech_SOURCE_DIR}/native_client"
+		libgenisys-dsp
 		)
 
 set(PBMM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm")
@@ -51,6 +52,7 @@ set(SCORER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.scorer"
 target_compile_definitions(libGenisysObjects PUBLIC
 		JUCE_WEB_BROWSER=0
 		JUCE_USE_CURL=0
+		JUCE_DISABLE_JUCE_VERSION_PRINTING=1
 		"PBMM_PATH=\"${PBMM_PATH}\""
 		"TFLITE_PATH=\"${TFLITE_PATH}\""
 		"SCORER_PATH=\"${SCORER_PATH}\"")
@@ -71,13 +73,19 @@ endif()
 
 target_link_libraries(libGenisysObjects
 		PRIVATE
-		juce::juce_dsp
-		gin
-		gin_dsp
 		DeepSpeechPrecompiled
 		wavio
+		libGenisysDSP
 		)
 
+if (APPLE)
+	target_link_libraries(libGenisysObjects
+			PRIVATE
+			"-framework Accelerate"
+			)
+endif()
+
+add_subdirectory(libgenisys-dsp)
 add_subdirectory(Modules)
 add_subdirectory(TestBench)
 add_subdirectory(tools)
