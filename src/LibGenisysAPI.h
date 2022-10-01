@@ -41,6 +41,7 @@ LibGenisysInstance EXPORT LibGenisysCreate();
  * @returns the result status
  */
 LibGenisysStatus EXPORT LibGenisysInitialize(LibGenisysInstance instance,
+                                             int expectedBlockSize,
                                              int sampleRate);
 
 /**

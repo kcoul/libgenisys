@@ -25,7 +25,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(quitCPanelLabel);
     quitCPanelLabel.setVisible(false);
 
-    quitCPanelButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    //quitCPanelButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
     quitCPanelButton.onClick = [] { quitCPanelButtonClicked(); };
     quitCPanelButton.setToggleState(true, juce::dontSendNotification);
     addAndMakeVisible(quitCPanelButton);
@@ -37,7 +37,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(enablePassthroughLabel);
     enablePassthroughLabel.setVisible(false);
 
-    enablePassthroughButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
+    //enablePassthroughButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
     enablePassthroughButton.onClick = [this] { enablePassthroughButtonClicked(); };
     addAndMakeVisible(enablePassthroughButton);
     enablePassthroughButton.setVisible(false);
@@ -52,16 +52,16 @@ MainComponent::MainComponent()
     logoImageComponent.onClick = [this] { settingsButtonClicked(); };
     addAndMakeVisible(logoImageComponent);
 
-    recordButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
-        recordButton.onClick = [this] { recordButtonClicked(); };
+    //recordButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    recordButton.onClick = [this] { recordButtonClicked(); };
     addAndMakeVisible(recordButton);
 
     recordButtonLabel.setText("Record", juce::NotificationType::dontSendNotification);
     recordButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(recordButtonLabel);
 
-    stopButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
-        stopButton.onClick = [this] { stopButtonClicked(); };
+    //stopButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    stopButton.onClick = [this] { stopButtonClicked(); };
     stopButton.setEnabled(false);
     addAndMakeVisible(stopButton);
 
@@ -69,8 +69,8 @@ MainComponent::MainComponent()
     stopButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(stopButtonLabel);
 
-    playButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
-        playButton.onClick = [this] { playButtonClicked(); };
+    //playButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    playButton.onClick = [this] { playButtonClicked(); };
     addAndMakeVisible(playButton);
 
     playButtonLabel.setText("Play", juce::NotificationType::dontSendNotification);
@@ -93,18 +93,7 @@ MainComponent::MainComponent()
     meter.setMeterSource (&meterSource);
     addAndMakeVisible (meter);
 
-#ifdef __linux__
-    auto audioError = deviceManager.initialiseWithDefaultDevices(1, 2);
-    jassert (audioError.isEmpty());
-
-    auto setup = deviceManager.getAudioDeviceSetup();
-    setup.bufferSize = 2048;
-    deviceManager.setAudioDeviceSetup(setup, true);
-
-    setAudioChannels(1,2);
-#else
-    setAudioChannels(1,2);
-#endif
+    setAudioChannels(2,2);
 
     auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
@@ -124,6 +113,7 @@ void MainComponent::loadAndRenderTestFile(juce::File testFile)
 
         newSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);   // [11]
         transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
+        transportLoaded = true;
 
         auto result = LibGenisysProcessNativePath(libGenisysInstance, testFile.getFullPathName().toStdString());
         if (!result.empty())
@@ -144,7 +134,7 @@ void MainComponent::enablePassthroughButtonClicked()
 MainComponent::~MainComponent()
 {
     shutdownAudio();
-    inputResampler.release();
+    LibGenisysDestroy(libGenisysInstance);
     meter.setLookAndFeel (nullptr);
 }
 
@@ -162,15 +152,20 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     const int resamplerBlockSize = samplesPerBlockExpected;
     const int resamplerMaxSamples = maxInputSampleRate * 2;
 
-    inputResampler = std::make_unique<gin::ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
-
-    if (currentBlockSize != samplesPerBlockExpected || currentSampleRate != sampleRate)
-        meterSource.resize (1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
+    if (currentBlockSize != samplesPerBlockExpected || currentSampleRate != sampleRate) {
+        meterSource.resize(1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
+        LibGenisysInitialize(libGenisysInstance, samplesPerBlockExpected, sampleRate);
+    }
 
     if (currentBlockSize != samplesPerBlockExpected)
     {
         currentBlockSize = samplesPerBlockExpected;
         resamplerBuffer = std::make_unique<juce::AudioBuffer<float>>(1, currentBlockSize);
+
+        if (!inputResampler)
+            inputResampler = std::make_unique<gin::ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
+        else
+            inputResampler->setSize(resamplerBlockSize, 1, resamplerMaxSamples);
     }
 
     if (currentSampleRate != sampleRate)
@@ -178,8 +173,6 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
         currentSampleRate = sampleRate;
         inputResampler->setResamplingRatio(currentSampleRate, targetSampleRate);
         inputResampler->reset();
-
-        LibGenisysInitialize(libGenisysInstance, sampleRate);
     }
 
     transportSource.prepareToPlay (samplesPerBlockExpected, sampleRate);
@@ -197,13 +190,13 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
 
             while (inputResampler.get()->samplesReady() >= currentBlockSize)
             {
-                inputResampler.get()->popAudioBuffer(*resamplerBuffer.get());
+                inputResampler.get()->popAudioBuffer(*resamplerBuffer);
 
                 const juce::ScopedLock sl (writerLock);
 
                 if (activeWriter.load() != nullptr)
                 {
-                    activeWriter.load()->write(resamplerBuffer.get()->getArrayOfReadPointers(), currentBlockSize);
+                    activeWriter.load()->write(resamplerBuffer->getArrayOfReadPointers(), currentBlockSize);
                 }
             }
         }
@@ -326,10 +319,13 @@ void MainComponent::stopButtonClicked()
 
 void MainComponent::playButtonClicked()
 {
-    transportSource.start();
-    currentlyPlaying = true;
-    recordButton.setEnabled(false);
-    stopButton.setEnabled(true);
+    if (transportLoaded)
+    {
+        transportSource.start();
+        currentlyPlaying = true;
+        recordButton.setEnabled(false);
+        stopButton.setEnabled(true);
+    }
 }
 
 void MainComponent::startRecording(const juce::File& file)

@@ -39,10 +39,10 @@ LibGenisysImpl::LibGenisysImpl()
 
 LibGenisysImpl::~LibGenisysImpl()
 {
-    inputResampler.release();
+
 }
 
-LibGenisysStatus LibGenisysImpl::initialize(int sampleRate)
+LibGenisysStatus LibGenisysImpl::initialize(int expectedBlockSize, int sampleRate)
 {
     if (sampleRate < 16000)
     {
@@ -50,12 +50,19 @@ LibGenisysStatus LibGenisysImpl::initialize(int sampleRate)
                         "Up-sampling might produce erratic speech recognition.\n", targetSampleRate, (int)sampleRate);
     }
 
-    const int resamplerBlockSize = sampleRate;
-    const int resamplerMaxSamples = maxInputSampleRate * 2;
-
-    if(!inputResampler)
-        inputResampler = std::make_unique<ResamplingFifo>(resamplerBlockSize, 1, resamplerMaxSamples);
-    else if (currentInputSampleRate != sampleRate)
+    if (!inputResampler)
+    {
+        currentBlockSize = expectedBlockSize;
+        const int resamplerMaxSamples = maxInputSampleRate * 2;
+        inputResampler = std::make_unique<ResamplingFifo>(expectedBlockSize, 1, resamplerMaxSamples);
+    }
+    else if (currentBlockSize != expectedBlockSize)
+    {
+        currentBlockSize = expectedBlockSize;
+        const int resamplerMaxSamples = maxInputSampleRate * 2;
+        inputResampler->setSize(currentBlockSize, 1, resamplerMaxSamples);
+    }
+    if (currentInputSampleRate != sampleRate)
     {
         currentInputSampleRate = sampleRate;
         inputResampler->setResamplingRatio(currentInputSampleRate, targetSampleRate);

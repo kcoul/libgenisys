@@ -8,10 +8,11 @@ LibGenisysInstance LibGenisysCreate()
 }
 
 LibGenisysStatus LibGenisysInitialize(LibGenisysInstance instance,
+                                             int expectedBlockSize,
                                              int sampleRate)
 {
     LibGenisysImpl* impl = (LibGenisysImpl*)instance;
-    return impl->initialize(sampleRate);
+    return impl->initialize(expectedBlockSize, sampleRate);
 }
 
 std::string LibGenisysProcessFloat(LibGenisysInstance instance,

@@ -29,7 +29,7 @@ class LibGenisysImpl
 public:
     LibGenisysImpl();
     ~LibGenisysImpl();
-    LibGenisysStatus initialize(int sampleRate);
+    LibGenisysStatus initialize(int expectedBlockSize, int sampleRate);
     std::string processFloat(float* buffer, int numSamples);
     std::string processNativeFloat(float* buffer, int numSamples);
     std::string processPath(std::string path);

@@ -26,29 +26,29 @@ private:
     //GUI elements
     juce::ImageButton logoImageComponent;
 
-    HackAudio::Button recordButton;
+    juce::ImageButton recordButton;
     void recordButtonClicked();
     juce::Label recordButtonLabel;
     void startRecording(const juce::File& file);
     void stop();
 
-    HackAudio::Button stopButton;
+    juce::ImageButton stopButton;
     void stopButtonClicked();
     juce::Label stopButtonLabel;
     void stopRecordingAndConvert();
 
-    HackAudio::Button playButton;
+    juce::ImageButton playButton;
     void playButtonClicked();
     juce::Label playButtonLabel;
 
     juce::ToggleButton settingsButton;
     void settingsButtonClicked();
 
-    HackAudio::Button quitCPanelButton;
+    juce::ImageButton quitCPanelButton;
     static void quitCPanelButtonClicked();
     juce::Label quitCPanelLabel;
 
-    HackAudio::Button enablePassthroughButton;
+    juce::ImageButton enablePassthroughButton;
     void enablePassthroughButtonClicked();
     juce::Label enablePassthroughLabel;
 
@@ -76,6 +76,7 @@ private:
     LibGenisysInstance libGenisysInstance;
 
     bool currentlyRecording = false;
+    bool transportLoaded = false;
     bool currentlyPlaying = false;
     bool enablePassthrough = false;
 
