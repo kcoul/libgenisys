@@ -101,8 +101,7 @@ MainComponent::MainComponent()
     setup.bufferSize = 2048;
     deviceManager.setAudioDeviceSetup(setup, true);
 
-    deviceManager.addAudioCallback (&audioSourcePlayer);
-    audioSourcePlayer.setSource (this);
+    setAudioChannels(1,2);
 #else
     setAudioChannels(1,2);
 #endif
@@ -144,8 +143,8 @@ void MainComponent::enablePassthroughButtonClicked()
 
 MainComponent::~MainComponent()
 {
-    inputResampler.release();
     shutdownAudio();
+    inputResampler.release();
     meter.setLookAndFeel (nullptr);
 }
 
