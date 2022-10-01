@@ -7,8 +7,6 @@ project(libGenisysDSP)
 add_library(libGenisysDSP STATIC
         juce/juce_AbstractFifo.cpp
         juce/juce_AudioDataConverters.cpp
-        juce/juce_DelayLine.cpp
-        juce/juce_DryWetMixer.cpp
         juce/juce_FloatVectorOperations.cpp
         libsamplerate/samplerate.c
         libsamplerate/src_linear.c
