@@ -5,6 +5,19 @@ namespace GuiApp
 //==============================================================================
 MainComponent::MainComponent()
 {
+    powerButtonPath.loadPathFromData (powerButtonPathData, sizeof (powerButtonPathData));
+    stopPath.loadPathFromData (stopPathData, sizeof (stopPathData));
+    recordPath.loadPathFromData (recordPathData, sizeof (recordPathData));
+    pausePath.loadPathFromData (pausePathData, sizeof (pausePathData));
+    playPath.loadPathFromData (playPathData, sizeof (playPathData));
+    playOutlinedPath.loadPathFromData (playOutlinedPathData, sizeof (playOutlinedPathData));
+    stopOutlinedPath.loadPathFromData (stopOutlinedPathData, sizeof (stopOutlinedPathData));
+    micPath.loadPathFromData (micPathData, sizeof (micPathData));
+    monitorPath.loadPathFromData (monitorPathData, sizeof (monitorPathData));
+    playOutlinedPath2.loadPathFromData (playOutlinedPathData2, sizeof (playOutlinedPathData2));
+    midGray = juce::Colour(0xFF425568);
+    midBlack = juce::Colour(0xFF100B28);
+
     backgroundThread.startThread();
     formatManager.registerBasicFormats();
 
@@ -16,43 +29,15 @@ MainComponent::MainComponent()
 
     setOpaque(true);
 
-//Selector Pane
     addAndMakeVisible(selector);
-    selector.setVisible(false);
 
-    quitCPanelLabel.setText("Quit CPanel", juce::NotificationType::dontSendNotification);
-    quitCPanelLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(quitCPanelLabel);
-    quitCPanelLabel.setVisible(false);
+    monitorButton.setShape(monitorPath, true, false, true);
+    monitorButton.onClick = [this] { monitorButtonClicked(); };
+    addAndMakeVisible(monitorButton);
 
-    //quitCPanelButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
-    quitCPanelButton.onClick = [] { quitCPanelButtonClicked(); };
-    quitCPanelButton.setToggleState(true, juce::dontSendNotification);
-    addAndMakeVisible(quitCPanelButton);
-    quitCPanelButton.setVisible(false);
-
-    enablePassthroughLabel.setText("Enable Passthrough",
-                                   juce::NotificationType::dontSendNotification);
-    enablePassthroughLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(enablePassthroughLabel);
-    enablePassthroughLabel.setVisible(false);
-
-    //enablePassthroughButton.setButtonStyle(HackAudio::Button::ButtonStyle::BarToggle);
-    enablePassthroughButton.onClick = [this] { enablePassthroughButtonClicked(); };
-    addAndMakeVisible(enablePassthroughButton);
-    enablePassthroughButton.setVisible(false);
-
-//Main Pane
     auto images = getBinaryDataImages();
 
-    logoImageComponent.setImages(true, true, true,
-                                 images.front(), 1.0f, juce::Colours::transparentWhite,
-                                 images.front(), 1.0f, juce::Colours::transparentWhite,
-                                 images.front(), 1.0f, juce::Colours::transparentWhite);
-    logoImageComponent.onClick = [this] { settingsButtonClicked(); };
-    addAndMakeVisible(logoImageComponent);
-
-    //recordButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    recordButton.setShape(micPath, true, false, true);
     recordButton.onClick = [this] { recordButtonClicked(); };
     addAndMakeVisible(recordButton);
 
@@ -60,7 +45,7 @@ MainComponent::MainComponent()
     recordButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(recordButtonLabel);
 
-    //stopButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    stopButton.setShape(stopOutlinedPath, true, false, true);
     stopButton.onClick = [this] { stopButtonClicked(); };
     stopButton.setEnabled(false);
     addAndMakeVisible(stopButton);
@@ -69,7 +54,7 @@ MainComponent::MainComponent()
     stopButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(stopButtonLabel);
 
-    //playButton.setButtonStyle(HackAudio::Button::ButtonStyle::Bar);
+    playButton.setShape(playOutlinedPath2, true, false, true);
     playButton.onClick = [this] { playButtonClicked(); };
     addAndMakeVisible(playButton);
 
@@ -80,24 +65,34 @@ MainComponent::MainComponent()
     textDisplay.setText("The quick brown fox jumps over the lazy dog", juce::dontSendNotification);
     textDisplay.setMultiLine(true, true);
     textDisplay.setReadOnly(true);
-    textDisplay.setColour(juce::TextEditor::backgroundColourId, quitCPanelButton.findColour(HackAudio::midgroundColourId));
+    textDisplay.setColour(juce::TextEditor::backgroundColourId, midGray);
     textDisplay.setFont(juce::Font(64));
+    textDisplay.setJustification(juce::Justification::centred);
     addAndMakeVisible(textDisplay);
 
-    lnf.setColour(foleys::LevelMeter::lmBackgroundColour, quitCPanelButton.findColour(HackAudio::midgroundColourId));
+    lnf.setColour(foleys::LevelMeter::lmBackgroundColour, midGray);
     lnf.setColour (foleys::LevelMeter::lmMeterGradientLowColour, juce::Colours::green);
-    lnf.setColour(foleys::LevelMeter::lmTicksColour,
-                  quitCPanelButton.findColour(HackAudio::backgroundColourId));
+    lnf.setColour(foleys::LevelMeter::lmTicksColour, midBlack);
 
     meter.setLookAndFeel (&lnf);
     meter.setMeterSource (&meterSource);
     addAndMakeVisible (meter);
 
-    setAudioChannels(2,2);
-
     auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
     loadAndRenderTestFile(lastRecording);
+
+    for (auto device : deviceManager.getCurrentDeviceTypeObject()->getDeviceNames(true))
+        if (device.equalsIgnoreCase(respeakerUSBDevice))
+        {
+            auto setup = deviceManager.getAudioDeviceSetup();
+            setup.inputDeviceName = respeakerUSBDevice;
+            setup.outputDeviceName = respeakerUSBDevice;
+            deviceManager.setAudioDeviceSetup(setup, true);
+            break;
+        }
+
+    setAudioChannels(2,2);
 }
 
 void MainComponent::loadAndRenderTestFile(juce::File testFile)
@@ -121,14 +116,10 @@ void MainComponent::loadAndRenderTestFile(juce::File testFile)
     }
 }
 
-void MainComponent::quitCPanelButtonClicked()
+void MainComponent::monitorButtonClicked()
 {
-    juce::JUCEApplicationBase::quit();
-}
-
-void MainComponent::enablePassthroughButtonClicked()
-{
-    enablePassthrough = enablePassthroughButton.getToggleState();
+    monitorButton.setToggleState(!monitorButton.getToggleState(), juce::dontSendNotification);
+    enablePassthrough = monitorButton.getToggleState();
 }
 
 MainComponent::~MainComponent()
@@ -228,60 +219,21 @@ void MainComponent::releaseResources()
 
 void MainComponent::paint (juce::Graphics& g)
 {
-    g.fillAll (quitCPanelButton.findColour(HackAudio::midgroundColourId));
+    g.fillAll (midGray);
 }
 
 void MainComponent::resized()
 {
-    //Tic-tac-toe resizable layout (3x3)
-    auto bounds = getBounds();
+    recordButton.setBounds(125,0, 100,100);
+    stopButton.setBounds(275,0, 100,100);
+    playButton.setBounds(425,0, 100,100);
+    monitorButton.setBounds(665, 0, 100, 100);
 
-    int thirdOfWidth = bounds.getWidth()/3;
-    int thirdOfWidthPlusOne = thirdOfWidth+1;
+    selector.setBounds(100, 125, getWidth()-100, getHeight()-200);
 
-    int mainHeight = bounds.getHeight();
-    int thirdOfMainHeight = mainHeight / 3;
+    textDisplay.setBounds(0, getHeight()-100,getWidth(), 100);
 
-    int labelHeight = thirdOfMainHeight / 5;
-
-    int margin = 5;
-
-    logoImageComponent.setBounds(thirdOfWidthPlusOne, 0, thirdOfWidth, thirdOfMainHeight);
-
-    recordButton.setBounds(0,
-                           0, thirdOfWidth,
-                        thirdOfMainHeight - labelHeight);
-    recordButtonLabel.setBounds(0,
-                             thirdOfMainHeight - labelHeight, thirdOfWidth, labelHeight);
-
-    stopButton.setBounds(0,
-                         thirdOfMainHeight, thirdOfWidth,
-                           thirdOfMainHeight - labelHeight);
-    stopButtonLabel.setBounds(0, (2 * thirdOfMainHeight) - labelHeight, thirdOfWidth, labelHeight);
-
-    playButton.setBounds(0,
-                         (2*thirdOfMainHeight), thirdOfWidth,
-                           thirdOfMainHeight - labelHeight);
-    playButtonLabel.setBounds(0, mainHeight - labelHeight, thirdOfWidth, labelHeight);
-
-    textDisplay.setBounds(thirdOfWidth + (margin * 2), thirdOfMainHeight + margin,
-                          thirdOfWidth - (margin * 2), (thirdOfMainHeight * 2) - (margin * 2));
-
-    meter.setBounds(thirdOfWidthPlusOne * 2, 0, thirdOfWidth, mainHeight);
-
-    selector.setBounds(2 * thirdOfWidth, thirdOfMainHeight, thirdOfWidth, mainHeight - 150);
-
-    quitCPanelButton.setBounds(getWidth()-(thirdOfWidth/2),
-                               getHeight()-(thirdOfMainHeight/2), thirdOfWidth/2,
-                               (thirdOfMainHeight - labelHeight)/2);
-    quitCPanelLabel.setBounds(getWidth()-(thirdOfWidth/2),
-                              getHeight()-(labelHeight/2), thirdOfWidth/2, labelHeight/2);
-
-    enablePassthroughButton.setBounds(getWidth() - (thirdOfWidth/2),
-                                      0, thirdOfWidth/2,
-                                      (thirdOfMainHeight - labelHeight)/2);
-    enablePassthroughLabel.setBounds(getWidth() - (thirdOfWidth/2),
-                                     (thirdOfMainHeight - labelHeight)/2, thirdOfWidth/2, labelHeight/2);
+    meter.setBounds(0, 0, 100, getHeight()-100);
 }
 
 void MainComponent::recordButtonClicked()
@@ -368,30 +320,5 @@ void MainComponent::stopRecordingAndConvert()
     auto result = LibGenisysProcessNativePath(libGenisysInstance, lastRecording.getFullPathName().toStdString());
     if (!result.empty())
         textDisplay.setText(juce::String(result), juce::dontSendNotification);
-}
-
-void MainComponent::settingsButtonClicked()
-{
-    logoImageComponent.setToggleState(!logoImageComponent.getToggleState(), juce::dontSendNotification);
-    if (logoImageComponent.getToggleState())
-    {
-        meter.setVisible(false);
-
-        quitCPanelButton.setVisible(true);
-        quitCPanelLabel.setVisible(true);
-        enablePassthroughButton.setVisible(true);
-        enablePassthroughLabel.setVisible(true);
-        selector.setVisible(true);
-    }
-    else
-    {
-        meter.setVisible(true);
-
-        quitCPanelButton.setVisible(false);
-        quitCPanelLabel.setVisible(false);
-        enablePassthroughButton.setVisible(false);
-        enablePassthroughLabel.setVisible(false);
-        selector.setVisible(false);
-    }
 }
 } // namespace GuiApp

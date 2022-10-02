@@ -2,6 +2,7 @@
 
 #include "CommonHeader.h"
 #include "LibGenisysAPI.h"
+#include "Paths.h"
 #include <gin_dsp/gin_dsp.h>
 
 namespace GuiApp
@@ -22,42 +23,61 @@ public:
     void resized() override;
 
 private:
+    const juce::String respeakerUSBDevice = "ReSpeaker 4 Mic Array (UAC1.0)";
     //==============================================================================
     //GUI elements
+    juce::Path powerButtonPath;
+    juce::Path stopPath;
+    juce::Path recordPath;
+    juce::Path pausePath;
+    juce::Path playPath;
+    juce::Path playOutlinedPath;
+    juce::Path stopOutlinedPath;
+    juce::Path micPath;
+    juce::Path monitorPath;
+    juce::Path playOutlinedPath2;
+
+    juce::Colour midGray;
+    juce::Colour midBlack;
+
     juce::ImageButton logoImageComponent;
 
-    juce::ImageButton recordButton;
+    juce::ShapeButton recordButton{"RecordButton",
+                                   juce::Colours::white,
+                                   juce::Colours::lightgrey,
+                                   juce::Colours::grey};
     void recordButtonClicked();
     juce::Label recordButtonLabel;
     void startRecording(const juce::File& file);
     void stop();
 
-    juce::ImageButton stopButton;
+    juce::ShapeButton stopButton{"StopButton",
+                                 juce::Colours::white,
+                                 juce::Colours::lightgrey,
+                                 juce::Colours::grey};
     void stopButtonClicked();
     juce::Label stopButtonLabel;
     void stopRecordingAndConvert();
 
-    juce::ImageButton playButton;
+    juce::ShapeButton playButton{"PlayButton",
+                                 juce::Colours::white,
+                                 juce::Colours::lightgrey,
+                                 juce::Colours::grey};
     void playButtonClicked();
     juce::Label playButtonLabel;
 
-    juce::ToggleButton settingsButton;
-    void settingsButtonClicked();
-
-    juce::ImageButton quitCPanelButton;
-    static void quitCPanelButtonClicked();
-    juce::Label quitCPanelLabel;
-
-    juce::ImageButton enablePassthroughButton;
-    void enablePassthroughButtonClicked();
-    juce::Label enablePassthroughLabel;
+    juce::ShapeButton monitorButton{"PassthroughButton",
+                                    juce::Colours::white,
+                                    juce::Colours::lightgrey,
+                                    juce::Colours::grey};
+    void monitorButtonClicked();
 
     juce::TextEditor textDisplay;
 
     juce::AudioDeviceSelectorComponent selector {
             deviceManager, 1, 1,
             2, 2,
-            false, false,
+            true, true,
             true, false};
 
     foleys::LevelMeterLookAndFeel lnf;

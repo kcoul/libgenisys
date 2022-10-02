@@ -14,7 +14,7 @@ constexpr bool isMobile()
 MainWindow::MainWindow(const juce::String& name)
     : DocumentWindow(name, getBackgroundColour(), allButtons)
 {
-    setName("Genisys");
+    setName("libGenisysTestBench");
     setUsingNativeTitleBar(true);
     setContentOwned(new MainComponent(), true);
 
@@ -23,10 +23,7 @@ MainWindow::MainWindow(const juce::String& name)
         setFullScreen(true);
     else
     {
-        //Gui was designed for 800 x 480
         getConstrainer()->setFixedAspectRatio(1.66667);
-        //Sufficient for demo purposes, in real app, maybe constrain
-        //to largest detected display for multi-monitor setups
         auto display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
         if (display)
         {
@@ -40,8 +37,8 @@ MainWindow::MainWindow(const juce::String& name)
                             y);
         }
         setResizable(true, true);
-        centreWithSize(getWidth(), getHeight());
-        setFullScreen(true);
+        centreWithSize(800, 480);
+        //setFullScreen(true);
     }
 
     setVisible(true);
