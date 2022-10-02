@@ -1,12 +1,14 @@
 #pragma once
 
-#include "LibGenisysAPI.h"
 #include "deepspeech.h"
-#include <string>
-#include <sstream>
-#include <iostream>
 #include "gin/gin_resamplingfifo.h"
+#include "LibGenisysAPI.h"
 #include "wavio.h"
+
+#include <iostream>
+#include <regex>
+#include <sstream>
+#include <string>
 
 typedef struct {
     const char* string;
@@ -68,5 +70,9 @@ private:
     std::string CandidateTranscriptToJSON(const CandidateTranscript *transcript);
     char* MetadataToJSON(Metadata* result);
     std::vector<std::string> SplitStringOnDelim(std::string in_string, std::string delim);
+
+    //Temp OS command methods
+    void OpenProTools();
+    void CloseProTools();
 };
 
