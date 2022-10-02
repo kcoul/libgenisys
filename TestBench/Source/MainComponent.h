@@ -7,7 +7,9 @@
 
 namespace GuiApp
 {
-class MainComponent  : public juce::AudioAppComponent
+class MainComponent  : public juce::AudioAppComponent,
+                       private juce::MidiInputCallback,
+                       private juce::MidiKeyboardStateListener
 {
 public:
     //==============================================================================
@@ -77,7 +79,7 @@ private:
     juce::AudioDeviceSelectorComponent selector {
             deviceManager, 1, 1,
             2, 2,
-            true, true,
+            false, false,
             true, false};
 
     foleys::LevelMeterLookAndFeel lnf;
@@ -114,6 +116,47 @@ private:
     int lastRecordingSize;
 
     void loadAndRenderTestFile(juce::File testFile);
+    void trySetReSpeakerAsDevice();
+
+    //MIDI
+    juce::ComboBox midiInputList;                     // [2]
+    juce::Label midiInputListLabel;
+    int lastInputIndex = 0;                           // [3]
+    bool isAddingFromMidiInput = false;               // [4]
+
+    juce::MidiKeyboardState keyboardState;            // [5]
+    juce::MidiKeyboardComponent keyboardComponent;    // [6]
+
+    juce::TextEditor midiMessagesBox;
+    double startTime;
+
+    static juce::String getMidiMessageDescription (const juce::MidiMessage& m);
+    void logMessage (const juce::String& m);
+    void setMidiInput (int index);
+    void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& message) override;
+    void handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber, float velocity) override;
+    void handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber, float /*velocity*/) override;
+    void postMessageToList (const juce::MidiMessage& message, const juce::String& source);
+    void addMessageToList (const juce::MidiMessage& message, const juce::String& source);
+
+    // This is used to dispach an incoming message to the message thread
+    class IncomingMessageCallback   : public juce::CallbackMessage
+    {
+    public:
+        IncomingMessageCallback (MainComponent* o, const juce::MidiMessage& m, const juce::String& s)
+                : owner (o), message (m), source (s)
+        {}
+
+        void messageCallback() override
+        {
+            if (owner != nullptr)
+                owner->addMessageToList (message, source);
+        }
+
+        Component::SafePointer<MainComponent> owner;
+        juce::MidiMessage message;
+        juce::String source;
+    };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

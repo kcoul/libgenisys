@@ -23,7 +23,9 @@ MainWindow::MainWindow(const juce::String& name)
         setFullScreen(true);
     else
     {
-        getConstrainer()->setFixedAspectRatio(1.66667);
+        //SVG (i.e. ShapeButtons) constraints depend quite a bit on having the line below set, which is fascinating...
+        getConstrainer()->setFixedAspectRatio(1.0);
+
         auto display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
         if (display)
         {
@@ -32,12 +34,12 @@ MainWindow::MainWindow(const juce::String& name)
                 int y = r.getHeight();
 
             setResizeLimits (800,
-                            480,
+                            800,
                             x,
                             y);
         }
         setResizable(true, true);
-        centreWithSize(800, 480);
+        centreWithSize(800, 800);
         //setFullScreen(true);
     }
 

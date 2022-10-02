@@ -3,7 +3,8 @@
 namespace GuiApp
 {
 //==============================================================================
-MainComponent::MainComponent()
+MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard),
+                                 startTime (juce::Time::getMillisecondCounterHiRes() * 0.001)
 {
     powerButtonPath.loadPathFromData (powerButtonPathData, sizeof (powerButtonPathData));
     stopPath.loadPathFromData (stopPathData, sizeof (stopPathData));
@@ -25,7 +26,7 @@ MainComponent::MainComponent()
 
     //Initial size big enough for most Desktop and Laptop displays
     //TODO: Make resizable layout
-    setSize (1600, 900);
+    setSize (800, 800);
 
     setOpaque(true);
 
@@ -78,10 +79,64 @@ MainComponent::MainComponent()
     meter.setMeterSource (&meterSource);
     addAndMakeVisible (meter);
 
+
+    addAndMakeVisible (midiInputListLabel);
+    midiInputListLabel.setText ("MIDI Input:", juce::dontSendNotification);
+    midiInputListLabel.attachToComponent (&midiInputList, true);
+
+    addAndMakeVisible (midiInputList);
+    midiInputList.setTextWhenNoChoicesAvailable ("No MIDI Inputs Enabled");
+    auto midiInputs = juce::MidiInput::getAvailableDevices();
+
+    juce::StringArray midiInputNames;
+
+    for (auto input : midiInputs)
+        midiInputNames.add (input.name);
+
+    midiInputList.addItemList (midiInputNames, 1);
+    midiInputList.onChange = [this] { setMidiInput (midiInputList.getSelectedItemIndex()); };
+
+    // find the first enabled device and use that by default
+    for (auto input : midiInputs)
+    {
+        if (deviceManager.isMidiInputDeviceEnabled (input.identifier))
+        {
+            setMidiInput (midiInputs.indexOf (input));
+            break;
+        }
+    }
+
+    // if no enabled devices were found just use the first one in the list
+    if (midiInputList.getSelectedId() == 0)
+        setMidiInput (0);
+
+    addAndMakeVisible (keyboardComponent);
+    keyboardState.addListener (this);
+
+    addAndMakeVisible (midiMessagesBox);
+    midiMessagesBox.setMultiLine (true);
+    midiMessagesBox.setReturnKeyStartsNewLine (true);
+    midiMessagesBox.setReadOnly (true);
+    midiMessagesBox.setScrollbarsShown (true);
+    midiMessagesBox.setCaretVisible (false);
+    midiMessagesBox.setPopupMenuEnabled (true);
+    midiMessagesBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0x32ffffff));
+    midiMessagesBox.setColour (juce::TextEditor::outlineColourId, juce::Colour (0x1c000000));
+    midiMessagesBox.setColour (juce::TextEditor::shadowColourId, juce::Colour (0x16000000));
+
+
+
     auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
     loadAndRenderTestFile(lastRecording);
 
+    setAudioChannels(2,2);
+
+    trySetReSpeakerAsDevice();
+}
+
+void MainComponent::trySetReSpeakerAsDevice()
+{
     for (auto device : deviceManager.getCurrentDeviceTypeObject()->getDeviceNames(true))
         if (device.equalsIgnoreCase(respeakerUSBDevice))
         {
@@ -91,8 +146,6 @@ MainComponent::MainComponent()
             deviceManager.setAudioDeviceSetup(setup, true);
             break;
         }
-
-    setAudioChannels(2,2);
 }
 
 void MainComponent::loadAndRenderTestFile(juce::File testFile)
@@ -124,6 +177,9 @@ void MainComponent::monitorButtonClicked()
 
 MainComponent::~MainComponent()
 {
+    keyboardState.removeListener (this);
+    deviceManager.removeMidiInputDeviceCallback (juce::MidiInput::getAvailableDevices()[midiInputList.getSelectedItemIndex()].identifier, this);
+
     shutdownAudio();
     LibGenisysDestroy(libGenisysInstance);
     meter.setLookAndFeel (nullptr);
@@ -224,16 +280,25 @@ void MainComponent::paint (juce::Graphics& g)
 
 void MainComponent::resized()
 {
+    auto margin = 8;
     recordButton.setBounds(125,0, 100,100);
     stopButton.setBounds(275,0, 100,100);
     playButton.setBounds(425,0, 100,100);
     monitorButton.setBounds(665, 0, 100, 100);
 
-    selector.setBounds(100, 125, getWidth()-100, getHeight()-200);
+    selector.setBounds(100, 125, getWidth()-100, getHeight()-520);
 
-    textDisplay.setBounds(0, getHeight()-100,getWidth(), 100);
+    meter.setBounds(3, 0, 100, getHeight()-420);
 
-    meter.setBounds(0, 0, 100, getHeight()-100);
+    textDisplay.setBounds(margin, getHeight()-420,getWidth() - (margin*2), 100);
+
+    auto area = getLocalBounds();
+    area.removeFromTop(getHeight()-320);
+
+    midiMessagesBox  .setBounds (area.removeFromTop(204).reduced (8));
+    midiInputList    .setBounds (area.removeFromTop (36).removeFromRight (getWidth() - 150).reduced (8));
+    keyboardComponent.setBounds (area.removeFromTop (80).reduced(8));
+
 }
 
 void MainComponent::recordButtonClicked()
@@ -321,4 +386,135 @@ void MainComponent::stopRecordingAndConvert()
     if (!result.empty())
         textDisplay.setText(juce::String(result), juce::dontSendNotification);
 }
+
+juce::String MainComponent::getMidiMessageDescription (const juce::MidiMessage& m)
+{
+    if (m.isNoteOn())           return "Note on "          + juce::MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3);
+    if (m.isNoteOff())          return "Note off "         + juce::MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3);
+    if (m.isProgramChange())    return "Program change "   + juce::String (m.getProgramChangeNumber());
+    if (m.isPitchWheel())       return "Pitch wheel "      + juce::String (m.getPitchWheelValue());
+    if (m.isAftertouch())       return "After touch "      + juce::MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3) +  ": " + juce::String (m.getAfterTouchValue());
+    if (m.isChannelPressure())  return "Channel pressure " + juce::String (m.getChannelPressureValue());
+    if (m.isAllNotesOff())      return "All notes off";
+    if (m.isAllSoundOff())      return "All sound off";
+    if (m.isMetaEvent())        return "Meta event";
+
+    if (m.isController())
+    {
+        juce::String name (juce::MidiMessage::getControllerName (m.getControllerNumber()));
+
+        if (name.isEmpty())
+            name = "[" + juce::String (m.getControllerNumber()) + "]";
+
+        return "Controller " + name + ": " + juce::String (m.getControllerValue());
+    }
+
+    return juce::String::toHexString (m.getRawData(), m.getRawDataSize());
+}
+
+void MainComponent::logMessage (const juce::String& m)
+{
+    midiMessagesBox.moveCaretToEnd();
+    midiMessagesBox.insertTextAtCaret (m + juce::newLine);
+}
+
+/** Starts listening to a MIDI input device, enabling it if necessary. */
+void MainComponent::setMidiInput (int index)
+{
+    auto list = juce::MidiInput::getAvailableDevices();
+
+    deviceManager.removeMidiInputDeviceCallback(list[lastInputIndex].identifier, this);
+
+    auto newInput = list[index];
+
+    if (! deviceManager.isMidiInputDeviceEnabled (newInput.identifier))
+        deviceManager.setMidiInputDeviceEnabled (newInput.identifier, true);
+
+    deviceManager.addMidiInputDeviceCallback (newInput.identifier, this);
+    midiInputList.setSelectedId (index + 1, juce::dontSendNotification);
+
+    lastInputIndex = index;
+}
+
+// These methods handle callbacks from the midi device + on-screen keyboard..
+void MainComponent::handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& message)
+{
+    const juce::ScopedValueSetter<bool> scopedInputFlag (isAddingFromMidiInput, true);
+    keyboardState.processNextMidiEvent (message);
+    postMessageToList (message, source->getName());
+}
+
+void MainComponent::handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber, float velocity)
+{
+    if (! isAddingFromMidiInput)
+    {
+        auto m = juce::MidiMessage::noteOn (midiChannel, midiNoteNumber, velocity);
+        m.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+        postMessageToList (m, "On-Screen Keyboard");
+    }
+
+    if (midiNoteNumber == 108) //C7, default Record/Arm button on Novation LaunchControl XL
+    {
+        juce::MessageManager::callAsync(
+        [=] ()
+        {
+            recordButtonClicked();
+        }
+        );
+    }
+}
+
+void MainComponent::handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber, float /*velocity*/)
+{
+    if (! isAddingFromMidiInput)
+    {
+        auto m = juce::MidiMessage::noteOff (midiChannel, midiNoteNumber);
+        m.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+        postMessageToList (m, "On-Screen Keyboard");
+    }
+
+    if (midiNoteNumber == 108) //C7, default Record/Arm button on Novation LaunchControl XL
+    {
+        juce::MessageManager::callAsync(
+        [=] ()
+        {
+            stopButtonClicked();
+        }
+        );
+    }
+}
+
+void MainComponent::postMessageToList (const juce::MidiMessage& message, const juce::String& source)
+{
+    (new IncomingMessageCallback (this, message, source))->post();
+}
+
+void MainComponent::addMessageToList (const juce::MidiMessage& message, const juce::String& source)
+{
+    auto time = message.getTimeStamp() - startTime;
+
+    auto hours   = ((int) (time / 3600.0)) % 24;
+    auto minutes = ((int) (time / 60.0)) % 60;
+    auto seconds = ((int) time) % 60;
+    auto millis  = ((int) (time * 1000.0)) % 1000;
+
+    auto timecode = juce::String::formatted ("%02d:%02d:%02d.%03d",
+                                             hours,
+                                             minutes,
+                                             seconds,
+                                             millis);
+
+    auto description = getMidiMessageDescription (message);
+
+    if (description == "fc")
+    {
+        //Stop Message. We'll use this to quit both this and the headless application, which won't have a GUI
+        if (juce::JUCEApplicationBase::isStandaloneApp())
+            juce::JUCEApplicationBase::quit();
+    }
+
+    juce::String midiMessageString (timecode + "  -  " + description + " (" + source + ")"); // [7]
+    logMessage (midiMessageString);
+}
+
 } // namespace GuiApp
