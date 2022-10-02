@@ -126,9 +126,16 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
 
 
 
-    auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
-    lastRecording = parentDir.getChildFile("GenisysTestRecording.wav");
-    loadAndRenderTestFile(lastRecording);
+    auto pwd = juce::File::getCurrentWorkingDirectory();
+    juce::File parent = pwd.getParentDirectory();
+    while (parent.getFileName() != "libgenisys")
+    {
+        parent = parent.getParentDirectory();
+    }
+
+    loadAndRenderTestFile(parent.getChildFile("scripts")
+                                        .getChildFile("CloseProTools.wav"),
+                                        false);
 
     setAudioChannels(2,2);
 
@@ -148,13 +155,11 @@ void MainComponent::trySetReSpeakerAsDevice()
         }
 }
 
-void MainComponent::loadAndRenderTestFile(juce::File testFile)
+void MainComponent::loadAndRenderTestFile(juce::File testFile, bool deleteAfterRender)
 {
-    juce::AudioFormatReader* reader = formatManager.createReaderFor(lastRecording);
+    juce::AudioFormatReader* reader = formatManager.createReaderFor(testFile);
     if (reader)
     {
-        lastRecordingSize = sizeof(unsigned char) * reader->lengthInSamples * 2;
-
         loadedAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
         reader->read(&loadedAudioBuffer, 0, reader->lengthInSamples,
                      0, true, true);
@@ -163,10 +168,60 @@ void MainComponent::loadAndRenderTestFile(juce::File testFile)
         transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
         transportLoaded = true;
 
-        auto result = LibGenisysProcessNativePath(libGenisysInstance, testFile.getFullPathName().toStdString());
-        if (!result.empty())
-            textDisplay.setText(juce::String(result), juce::dontSendNotification);
+        processAudioFile(testFile, deleteAfterRender);
     }
+}
+
+void MainComponent::processAudioFile(juce::File file, bool deleteAfterRender)
+{
+    auto result = LibGenisysProcessNativePath(libGenisysInstance, file.getFullPathName().toStdString());
+    if (!result.empty())
+        textDisplay.setText(juce::String(result), juce::dontSendNotification);
+
+    //Keep user's disk tidy unless we are purposely recording files to train the model
+    //TODO: Develop system for batch recording and submitting audio files
+    if (deleteAfterRender)
+        file.deleteFile();
+
+#ifdef __APPLE__
+    if (result.find("genesis") != std::string::npos)
+    {
+        if (result.find("pro") != std::string::npos && result.find("tools") != std::string::npos)
+        {
+            if (result.find("open") != std::string::npos)
+            {
+                OpenProToolsMac();
+            }
+            else if (result.find("close") != std::string::npos || result.find("quit") != std::string::npos)
+            {
+                CloseProToolsMac();
+            }
+        }
+        else if (result.find("live") != std::string::npos ||
+                 result.find("life") != std::string::npos)
+        {
+            if (result.find("open") != std::string::npos)
+            {
+                OpenAbletonMac();
+            }
+            else if (result.find("close") != std::string::npos || result.find("quit") != std::string::npos)
+            {
+                CloseAbletonMac();
+            }
+        }
+        else if (result.find("logic") != std::string::npos)
+        {
+            if (result.find("open") != std::string::npos)
+            {
+                OpenLogicMac();
+            }
+            else if (result.find("close") != std::string::npos || result.find("quit") != std::string::npos)
+            {
+                CloseLogicMac();
+            }
+        }
+    }
+#endif
 }
 
 void MainComponent::monitorButtonClicked()
@@ -307,13 +362,7 @@ void MainComponent::recordButtonClicked()
     playButton.setEnabled(false);
     stopButton.setEnabled(true);
 
-    auto parentDir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
-    lastRecording = parentDir.getNonexistentChildFile ("GenisysTestRecording", ".wav");
-
-    if (lastRecording.existsAsFile())
-        lastRecording.deleteFile();
-
-    startRecording (lastRecording);
+    startRecording ();
     currentlyRecording = true;
 }
 
@@ -345,15 +394,16 @@ void MainComponent::playButtonClicked()
     }
 }
 
-void MainComponent::startRecording(const juce::File& file)
+void MainComponent::startRecording()
 {
     stop();
 
+    lastRecording = juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory)
+                               .getChildFile("temp.wav");
+
     if (currentSampleRate > 0)
     {
-        file.deleteFile();
-
-        if (auto fileStream = std::unique_ptr<juce::FileOutputStream> (file.createOutputStream()))
+        if (auto fileStream = std::unique_ptr<juce::FileOutputStream> (lastRecording.createOutputStream()))
         {
             juce::WavAudioFormat wavFormat;
 
@@ -379,12 +429,9 @@ void MainComponent::stop()
 
 void MainComponent::stopRecordingAndConvert()
 {
-    currentlyRecording = false;
     stop();
-
-    auto result = LibGenisysProcessNativePath(libGenisysInstance, lastRecording.getFullPathName().toStdString());
-    if (!result.empty())
-        textDisplay.setText(juce::String(result), juce::dontSendNotification);
+    currentlyRecording = false;
+    processAudioFile(lastRecording, true);
 }
 
 juce::String MainComponent::getMidiMessageDescription (const juce::MidiMessage& m)
@@ -515,6 +562,92 @@ void MainComponent::addMessageToList (const juce::MidiMessage& message, const ju
 
     juce::String midiMessageString (timecode + "  -  " + description + " (" + source + ")"); // [7]
     logMessage (midiMessageString);
+}
+
+void MainComponent::OpenAbletonMac()
+{
+    juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
+    juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
+    juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
+
+    if (ableton11SuiteApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Suite\" to activate'";
+        system(cmd);
+    }
+    else if (ableton11StandardApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Standard\" to activate'";
+        system(cmd);
+    }
+    else if (ableton11IntroApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Intro\" to activate'";
+        system(cmd);
+    }
+}
+
+void MainComponent::CloseAbletonMac()
+{
+    juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
+    juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
+    juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
+
+    if (ableton11SuiteApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Suite\" to quit'";
+        system(cmd);
+    }
+    else if (ableton11StandardApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Standard\" to quit'";
+        system(cmd);
+    }
+    else if (ableton11IntroApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Intro\" to quit'";
+        system(cmd);
+    }
+}
+
+void MainComponent::OpenLogicMac()
+{
+    juce::File logicApp = juce::File("/Applications/Logic Pro X.app");
+    if (logicApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Logic Pro X\" to activate'";
+        system(cmd);
+    }
+}
+
+void MainComponent::CloseLogicMac()
+{
+    juce::File logicApp = juce::File("/Applications/Logic Pro X.app");
+    if (logicApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Logic Pro X\" to quit'";
+        system(cmd);
+    }
+}
+
+void MainComponent::OpenProToolsMac()
+{
+    juce::File proToolsApp = juce::File("/Applications/Pro Tools.app");
+    if (proToolsApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Pro Tools\" to activate'";
+        system(cmd);
+    }
+}
+
+void MainComponent::CloseProToolsMac()
+{
+    juce::File proToolsApp = juce::File("/Applications/Pro Tools.app");
+    if (proToolsApp.exists())
+    {
+        const char *cmd = "osascript -e 'tell application \"Pro Tools\" to quit'";
+        system(cmd);
+    }
 }
 
 } // namespace GuiApp

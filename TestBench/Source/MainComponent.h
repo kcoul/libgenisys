@@ -50,7 +50,7 @@ private:
                                    juce::Colours::grey};
     void recordButtonClicked();
     juce::Label recordButtonLabel;
-    void startRecording(const juce::File& file);
+    void startRecording();
     void stop();
 
     juce::ShapeButton stopButton{"StopButton",
@@ -96,6 +96,7 @@ private:
     int currentSampleRate = 0;
 
     LibGenisysInstance libGenisysInstance;
+    void processAudioFile(juce::File file, bool deleteAfterRender);
 
     bool currentlyRecording = false;
     bool transportLoaded = false;
@@ -113,9 +114,8 @@ private:
     std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
     juce::CriticalSection writerLock;
     std::atomic<juce::AudioFormatWriter::ThreadedWriter*> activeWriter { nullptr };
-    int lastRecordingSize;
 
-    void loadAndRenderTestFile(juce::File testFile);
+    void loadAndRenderTestFile(juce::File testFile, bool deleteAfterRender);
     void trySetReSpeakerAsDevice();
 
     //MIDI
@@ -157,6 +157,16 @@ private:
         juce::MidiMessage message;
         juce::String source;
     };
+
+
+    //Temp OS-level command methods
+    void OpenLogicMac();
+    void OpenProToolsMac();
+    void CloseLogicMac();
+    void CloseProToolsMac();
+
+    void OpenAbletonMac();
+    void CloseAbletonMac();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

@@ -135,16 +135,9 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
         printf("%s\n", result.string);
         auto ret = std::string(result.string);
 
-        //TODO: WIP: String massaging
+        //TODO: WIP: Optimize string massaging
         ret = std::regex_replace(ret, std::regex("^ +| +$|( ) +"), "$1");
 
-#ifdef __APPLE__
-        if (ret == "genesis open pro tools")
-            OpenProToolsMac();
-        else if (ret == "genesis close pro tools")
-            CloseProToolsMac();
-#endif
-        
         DS_FreeString((char*)result.string);
         return std::string(ret);
     }
@@ -155,18 +148,6 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
     }
 
     return "";
-}
-
-void LibGenisysImpl::OpenProToolsMac()
-{
-    char* cmd = "osascript -e 'tell application \"Pro Tools\" to activate'";
-    system(cmd);
-}
-
-void LibGenisysImpl::CloseProToolsMac()
-{
-    char* cmd = "osascript -e 'tell application \"Pro Tools\" to quit'";
-    system(cmd);
 }
 
 ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize, bool extended_output, bool json_output)
