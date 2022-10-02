@@ -138,11 +138,13 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
         //TODO: WIP: String massaging
         ret = std::regex_replace(ret, std::regex("^ +| +$|( ) +"), "$1");
 
+#ifdef __APPLE__
         if (ret == "genesis open pro tools")
-            OpenProTools();
+            OpenProToolsMac();
         else if (ret == "genesis close pro tools")
-            CloseProTools();
-
+            CloseProToolsMac();
+#endif
+        
         DS_FreeString((char*)result.string);
         return std::string(ret);
     }
@@ -155,13 +157,13 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
     return "";
 }
 
-void LibGenisysImpl::OpenProTools()
+void LibGenisysImpl::OpenProToolsMac()
 {
     char* cmd = "osascript -e 'tell application \"Pro Tools\" to activate'";
     system(cmd);
 }
 
-void LibGenisysImpl::CloseProTools()
+void LibGenisysImpl::CloseProToolsMac()
 {
     char* cmd = "osascript -e 'tell application \"Pro Tools\" to quit'";
     system(cmd);

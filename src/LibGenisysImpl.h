@@ -72,7 +72,7 @@ private:
     std::vector<std::string> SplitStringOnDelim(std::string in_string, std::string delim);
 
     //Temp OS command methods
-    void OpenProTools();
-    void CloseProTools();
+    void OpenProToolsMac();
+    void CloseProToolsMac();
 };
 
