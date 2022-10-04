@@ -81,7 +81,7 @@ elseif(WIN32)
 			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Windows/rnnoise.lib")
 elseif(UNIX AND NOT APPLE)
 	set_property(TARGET RNNoise PROPERTY
-			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/librnnoise.a")
+		IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Linux/librnnoise.a")
 endif()
 
 target_link_libraries(libGenisysObjects
