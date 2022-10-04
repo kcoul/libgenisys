@@ -2,6 +2,10 @@
 
 LibGenisysImpl::LibGenisysImpl()
 {
+    // RNNoise
+    //Use the default model (must be done before registering the callback below)
+    st = rnnoise_create(NULL);
+
     int status = DS_CreateModel(PBMM_PATH, &ctx);
     if (status != 0)
     {
@@ -39,7 +43,7 @@ LibGenisysImpl::LibGenisysImpl()
 
 LibGenisysImpl::~LibGenisysImpl()
 {
-
+    rnnoise_destroy(st);
 }
 
 LibGenisysStatus LibGenisysImpl::initialize(int expectedBlockSize, int sampleRate)
@@ -116,9 +120,35 @@ ds_audio_buffer LibGenisysImpl::GetAudioBuffer(std::string path)
     return res;
 }
 
+ds_audio_buffer LibGenisysImpl::DeNoiseAudioBuffer(ds_audio_buffer &input)
+{
+    if (!denoisingBuffer)
+        denoisingBuffer = std::make_unique<juce::AudioBuffer<float>>(1, input.buffer_size);
+    else
+        denoisingBuffer->setSize(1, input.buffer_size);
+
+    juce::AudioDataConverters::convertInt16LEToFloat(input.buffer, denoisingBuffer->getWritePointer(0), input.buffer_size);
+    //for (int i = 0; i < input.buffer_size; i++)
+    //{
+    //    denoisingBuffer->getWritePointer(0)[i] = input.buffer[i] * 32768.0f;
+    //}
+
+    rnnoise_process_frame(st, denoisingBuffer->getWritePointer(0), denoisingBuffer->getReadPointer(0));
+    
+    juce::AudioDataConverters::convertFloatToInt16LE(denoisingBuffer->getReadPointer(0), input.buffer, input.buffer_size);
+    //for (int i = 0; i < input.buffer_size; i++)
+    //{
+    //    input.buffer[i] = juce::jmax<float>(-32768, juce::jmin<float>(32767, denoisingBuffer->getReadPointer(0)[i])) * (1.0f / 32768.0f);
+    //}
+
+    return input;
+}
+
 std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, bool show_times)
 {
     ds_audio_buffer audio = GetAudioBuffer(path);
+
+    DeNoiseAudioBuffer(audio);
 
     // Pass audio to DeepSpeech
     // We take half of buffer_size because buffer is a char* while

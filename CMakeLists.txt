@@ -43,6 +43,7 @@ target_compile_features(libGenisysObjects PUBLIC cxx_std_14)
 target_include_directories(libGenisysObjects PUBLIC
 		"${DeepSpeech_SOURCE_DIR}/native_client"
 		libgenisys-dsp
+		include
 		)
 
 set(PBMM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm")
@@ -71,11 +72,24 @@ elseif(UNIX AND NOT APPLE)
 			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Linux/libdeepspeech.so")
 endif()
 
+add_library(RNNoise STATIC IMPORTED)
+if (APPLE)
+	set_property(TARGET RNNoise PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/librnnoise.a")
+elseif(WIN32)
+	set_property(TARGET RNNoise PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Windows/rnnoise.lib")
+elseif(UNIX AND NOT APPLE)
+	set_property(TARGET RNNoise PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/librnnoise.a")
+endif()
+
 target_link_libraries(libGenisysObjects
 		PRIVATE
 		DeepSpeechPrecompiled
 		wavio
 		libGenisysDSP
+		RNNoise
 		)
 
 if (APPLE)

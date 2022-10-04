@@ -1,9 +1,12 @@
 #pragma once
 
 #include "deepspeech.h"
+#include "rnnoise.h"
+#include "wavio.h"
+
 #include "gin/gin_resamplingfifo.h"
 #include "LibGenisysAPI.h"
-#include "wavio.h"
+
 
 #include <iostream>
 #include <regex>
@@ -44,10 +47,17 @@ private:
     int currentInputSampleRate;
     int currentBlockSize;
 
-    //DeepSpeech
+    //DeepSpeech State Variable
     ModelState* ctx;
 
+    //RNNoise State Variable
+    DenoiseState *st;
+
     ds_audio_buffer GetAudioBuffer(std::string path);
+
+    ds_audio_buffer DeNoiseAudioBuffer(ds_audio_buffer& input);
+    std::unique_ptr<juce::AudioBuffer<float>> denoisingBuffer;
+
     std::string ProcessFile(ModelState* context, std::string path, bool show_times);
     ds_result LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize, bool extended_output, bool json_output);
 
