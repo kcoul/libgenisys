@@ -19,7 +19,17 @@ function(add_images_from_directory target imagesSubFolder)
     endif()
 endfunction()
 
-juce_add_gui_app(${TargetName} PRODUCT_NAME "libGenisysTestBench")
+juce_add_gui_app(${TargetName} PRODUCT_NAME "libGenisysTestBench"
+        COMPANY_NAME="MusicLink Consulting Ltd."
+        PRODUCT_NAME="libGenisys Test Bench"
+        VERSION="0.0.1"
+        BUNDLE_ID="com.libgenisys.testbench"
+        MICROPHONE_PERMISSION_ENABLED=TRUE
+        MICROPHONE_PERMISSION_TEXT="libGenisysTestBench requires microphone access"
+        BLUETOOTH_PERMISSION_ENABLED=TRUE
+        BLUETOOTH_PERMISSION_TEXT="libGenisysTestBench requires bluetooth access"
+        ICON_SMALL "${CMAKE_CURRENT_LIST_DIR}/Images/geniSYS.png"
+        ICON_BIG "${CMAKE_CURRENT_LIST_DIR}/Images/geniSYS.png")
 
 #add_images_from_directory needs to be below juce_add_gui_app
 add_images_from_directory(${TargetName} Images)
@@ -47,10 +57,7 @@ target_compile_definitions(${TargetName} PRIVATE
         JUCE_USE_CURL=0
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:${TargetName},JUCE_PROJECT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:${TargetName},JUCE_VERSION>"
-        JUCE_DISPLAY_SPLASH_SCREEN=0
-        #MICROPHONE_PERMISSION_ENABLED=TRUE
-        #MICROPHONE_PERMISSION_TEXT="macOS requires permission for Microphone access" 
-	)
+        JUCE_DISPLAY_SPLASH_SCREEN=0)
 
 add_library(LibGenisys SHARED IMPORTED)
 if(APPLE)

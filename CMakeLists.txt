@@ -103,3 +103,13 @@ add_subdirectory(libgenisys-dsp)
 add_subdirectory(Modules)
 add_subdirectory(TestBench)
 add_subdirectory(tools)
+
+if(APPLE)
+	set(LIBRARY_FILE "${CMAKE_CURRENT_BINARY_DIR}/libGenisysDynamic.dylib")
+	set(LIBRARY_FILE_NAME "libGenisysDynamic.dylib")
+	add_custom_command(TARGET GenisysDynamic POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy
+			"${LIBRARY_FILE}"
+			"${CMAKE_CURRENT_BINARY_DIR}/TestBench/libGenisysTestBench_artefacts/$<CONFIG>/${LIBRARY_FILE_NAME}"
+			COMMENT "Copying library to output directory")
+endif()

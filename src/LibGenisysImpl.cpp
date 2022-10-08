@@ -148,7 +148,7 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
 {
     ds_audio_buffer audio = GetAudioBuffer(path);
 
-    DeNoiseAudioBuffer(audio);
+    //DeNoiseAudioBuffer(audio);
 
     // Pass audio to DeepSpeech
     // We take half of buffer_size because buffer is a char* while

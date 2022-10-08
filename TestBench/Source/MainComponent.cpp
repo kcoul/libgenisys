@@ -34,7 +34,9 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
 
     monitorButton.setShape(monitorPath, true, false, true);
     monitorButton.onClick = [this] { monitorButtonClicked(); };
+#if JUCE_DEBUG
     addAndMakeVisible(monitorButton);
+#endif
 
     auto images = getBinaryDataImages();
 
@@ -63,7 +65,7 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
     playButtonLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(playButtonLabel);
 
-    textDisplay.setText("The quick brown fox jumps over the lazy dog", juce::dontSendNotification);
+    //textDisplay.setText("The quick brown fox jumps over the lazy dog", juce::dontSendNotification);
     textDisplay.setMultiLine(true, true);
     textDisplay.setReadOnly(true);
     textDisplay.setColour(juce::TextEditor::backgroundColourId, midGray);
@@ -124,22 +126,26 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
     midiMessagesBox.setColour (juce::TextEditor::outlineColourId, juce::Colour (0x1c000000));
     midiMessagesBox.setColour (juce::TextEditor::shadowColourId, juce::Colour (0x16000000));
 
-
-
-    auto pwd = juce::File::getCurrentWorkingDirectory();
-    juce::File parent = pwd.getParentDirectory();
-    while (parent.getFileName() != "libgenisys")
-    {
-        parent = parent.getParentDirectory();
-    }
-
-    loadAndRenderTestFile(parent.getChildFile("scripts")
-                                        .getChildFile("CloseProTools.wav"),
-                                        false);
+    auto parent = juce::File::getCurrentWorkingDirectory();
+    testFile = parent.getChildFile("scripts").getChildFile("OpenProTools.wav");
+    loadTestFile(testFile);
 
     setAudioChannels(2,2);
 
     trySetReSpeakerAsDevice();
+    requestMicrophoneAccess();
+}
+
+void MainComponent::requestMicrophoneAccess()
+{
+    if (!juce::RuntimePermissions::isGranted(juce::RuntimePermissions::recordAudio))
+    {
+        juce::Component::SafePointer<MainComponent> safeThis(this);
+
+        juce::RuntimePermissions::request(juce::RuntimePermissions::recordAudio,
+                                          [safeThis](bool granted) mutable {});
+        return;
+    }
 }
 
 void MainComponent::trySetReSpeakerAsDevice()
@@ -155,7 +161,7 @@ void MainComponent::trySetReSpeakerAsDevice()
         }
 }
 
-void MainComponent::loadAndRenderTestFile(juce::File testFile, bool deleteAfterRender)
+void MainComponent::loadTestFile(juce::File testFile)
 {
     juce::AudioFormatReader* reader = formatManager.createReaderFor(testFile);
     if (reader)
@@ -167,8 +173,6 @@ void MainComponent::loadAndRenderTestFile(juce::File testFile, bool deleteAfterR
         newSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);   // [11]
         transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
         transportLoaded = true;
-
-        processAudioFile(testFile, deleteAfterRender);
     }
 }
 
@@ -286,7 +290,7 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     {
         meterSource.measureBlock (*bufferToFill.buffer);
 
-        if (currentlyRecording)
+        if (currentlyRecordingCommandSample)
         {
             inputResampler.get()->pushAudioBuffer(*bufferToFill.buffer);
 
@@ -301,9 +305,11 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
                     activeWriter.load()->write(resamplerBuffer->getArrayOfReadPointers(), currentBlockSize);
                 }
             }
-        }
 
-        if (currentlyPlaying)
+            if (!enablePassthrough)
+                bufferToFill.clearActiveBufferRegion();
+        }
+        else if (currentlyPlayingCommandSample)
         {
             transportSource.getNextAudioBlock(bufferToFill);
             if (transportSource.hasStreamFinished())
@@ -315,6 +321,15 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
                             recordButton.setEnabled(true);
                             stopButton.setEnabled(false);
                             playButton.setEnabled(true);
+
+                            processAudioFile(testFile, false);
+
+                            auto parent = juce::File::getCurrentWorkingDirectory();
+                            if (testFile.getFileName() == "OpenProTools.wav")
+                                testFile = parent.getChildFile("scripts").getChildFile("CloseProTools.wav");
+                            else if (testFile.getFileName() == "CloseProTools.wav")
+                                testFile = parent.getChildFile("scripts").getChildFile("OpenProTools.wav");
+                            loadTestFile(testFile);
                         }
                 );
             }
@@ -363,19 +378,19 @@ void MainComponent::recordButtonClicked()
     stopButton.setEnabled(true);
 
     startRecording ();
-    currentlyRecording = true;
+    currentlyRecordingCommandSample = true;
 }
 
 void MainComponent::stopButtonClicked()
 {
-    if (currentlyRecording)
+    if (currentlyRecordingCommandSample)
     {
         stopRecordingAndConvert();
     }
-    if (currentlyPlaying)
+    if (currentlyPlayingCommandSample)
     {
         transportSource.stop();
-        currentlyPlaying = false;
+        currentlyPlayingCommandSample = false;
     }
 
     recordButton.setEnabled(true);
@@ -388,7 +403,7 @@ void MainComponent::playButtonClicked()
     if (transportLoaded)
     {
         transportSource.start();
-        currentlyPlaying = true;
+        currentlyPlayingCommandSample = true;
         recordButton.setEnabled(false);
         stopButton.setEnabled(true);
     }
@@ -430,7 +445,7 @@ void MainComponent::stop()
 void MainComponent::stopRecordingAndConvert()
 {
     stop();
-    currentlyRecording = false;
+    currentlyRecordingCommandSample = false;
     processAudioFile(lastRecording, true);
 }
 
@@ -500,7 +515,9 @@ void MainComponent::handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int
         postMessageToList (m, "On-Screen Keyboard");
     }
 
-    if (midiNoteNumber == 108) //C7, default Record/Arm button on Novation LaunchControl XL
+    //C7, default Record/Arm button on Novation LaunchControl XL ||
+    //default Stop/Solo/Mute button when in Custom Drum Mode on Novation Launchpad Mini
+    if (midiNoteNumber == 108 || midiNoteNumber == 71) //C7, default Record/Arm button on Novation LaunchControl XL
     {
         juce::MessageManager::callAsync(
         [=] ()
@@ -520,7 +537,9 @@ void MainComponent::handleNoteOff (juce::MidiKeyboardState*, int midiChannel, in
         postMessageToList (m, "On-Screen Keyboard");
     }
 
-    if (midiNoteNumber == 108) //C7, default Record/Arm button on Novation LaunchControl XL
+    //C7, default Record/Arm button on Novation LaunchControl XL ||
+    //default Stop/Solo/Mute button when in Custom Drum Mode on Novation Launchpad Mini
+    if (midiNoteNumber == 108 || midiNoteNumber == 71)
     {
         juce::MessageManager::callAsync(
         [=] ()

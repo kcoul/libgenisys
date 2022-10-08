@@ -98,9 +98,9 @@ private:
     LibGenisysInstance libGenisysInstance;
     void processAudioFile(juce::File file, bool deleteAfterRender);
 
-    bool currentlyRecording = false;
+    bool currentlyRecordingCommandSample = false;
     bool transportLoaded = false;
-    bool currentlyPlaying = false;
+    bool currentlyPlayingCommandSample = false;
     bool enablePassthrough = false;
 
     std::unique_ptr<juce::AudioFormatReaderSource> newSource;
@@ -115,8 +115,10 @@ private:
     juce::CriticalSection writerLock;
     std::atomic<juce::AudioFormatWriter::ThreadedWriter*> activeWriter { nullptr };
 
-    void loadAndRenderTestFile(juce::File testFile, bool deleteAfterRender);
+    juce::File testFile;
+    void loadTestFile(juce::File testFile);
     void trySetReSpeakerAsDevice();
+    void requestMicrophoneAccess();
 
     //MIDI
     juce::ComboBox midiInputList;                     // [2]
