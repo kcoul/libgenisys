@@ -19,15 +19,14 @@ function(add_images_from_directory target imagesSubFolder)
     endif()
 endfunction()
 
-juce_add_gui_app(${TargetName} PRODUCT_NAME "libGenisysTestBench"
-        COMPANY_NAME="MusicLink Consulting Ltd."
-        PRODUCT_NAME="libGenisys Test Bench"
-        VERSION="0.0.1"
-        BUNDLE_ID="com.libgenisys.testbench"
-        MICROPHONE_PERMISSION_ENABLED=TRUE
+juce_add_gui_app(${TargetName}
+        PRODUCT_NAME "libGenisysTestBench"
+        MICROPHONE_PERMISSION_ENABLED TRUE
         MICROPHONE_PERMISSION_TEXT="libGenisysTestBench requires microphone access"
-        BLUETOOTH_PERMISSION_ENABLED=TRUE
+        BLUETOOTH_PERMISSION_ENABLED TRUE
         BLUETOOTH_PERMISSION_TEXT="libGenisysTestBench requires bluetooth access"
+        VERSION "0.0.1"
+        BUNDLE_ID "com.libgenisys.testbench"
         ICON_SMALL "${CMAKE_CURRENT_LIST_DIR}/Images/geniSYS.png"
         ICON_BIG "${CMAKE_CURRENT_LIST_DIR}/Images/geniSYS.png")
 
@@ -43,8 +42,13 @@ set (SRC_LIST
         Source/MainComponent.cpp
         Source/MainWindow.cpp)
 
+set(RESOURCE_FILES
+        "${CMAKE_CURRENT_LIST_DIR}/Resources/CloseProTools.wav"
+        "${CMAKE_CURRENT_LIST_DIR}/Resources/OpenProTools.wav")
+
 target_sources(${TargetName} PRIVATE
-        ${SRC_LIST})
+        ${SRC_LIST}
+        ${RESOURCE_FILES})
 
 target_include_directories(${TargetName} PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
@@ -59,36 +63,37 @@ target_compile_definitions(${TargetName} PRIVATE
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:${TargetName},JUCE_VERSION>"
         JUCE_DISPLAY_SPLASH_SCREEN=0)
 
-add_library(LibGenisys SHARED IMPORTED)
-if(APPLE)
-    set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dylib")
-elseif(WIN32)
-    set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
-    set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.lib")
+if(EXTERNALLY_FACING)
+    add_library(LibGenisys SHARED IMPORTED)
+    if(APPLE)
+        set_property(TARGET LibGenisys PROPERTY
+                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dylib")
+    elseif(WIN32)
+        set_property(TARGET LibGenisys PROPERTY
+                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
+        set_property(TARGET LibGenisys PROPERTY
+                IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.lib")
 
-    #Copy DLLs to TestBench build directory
-    set(LIBRARY_FILE "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
-    set(LIBRARY_FILE_NAME "GenisysDynamic.dll")
-    add_custom_command(TARGET ${TargetName} POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy
-            "${LIBRARY_FILE}"
-            "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${LIBRARY_FILE_NAME}"
-            COMMENT "Copying library to output directory")
+        #Copy DLLs to TestBench build directory
+        set(LIBRARY_FILE "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
+        set(LIBRARY_FILE_NAME "GenisysDynamic.dll")
+        add_custom_command(TARGET ${TargetName} POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E copy
+                "${LIBRARY_FILE}"
+                "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${LIBRARY_FILE_NAME}"
+                COMMENT "Copying library to output directory")
 
-    set(DS_LIBRARY_FILE "${CMAKE_SOURCE_DIR}/libs/Windows/libDeepSpeech.so")
-    set(DS_LIBRARY_FILE_NAME "libDeepSpeech.so")
-    add_custom_command(TARGET ${TargetName} POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy
-            "${DS_LIBRARY_FILE}"
-            "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${DS_LIBRARY_FILE_NAME}"
-            COMMENT "Copying libDeepSpeech to output directory")
-
-elseif(UNIX AND NOT APPLE)
-    set_property(TARGET LibGenisys PROPERTY
-            IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.so")
+        set(DS_LIBRARY_FILE "${CMAKE_SOURCE_DIR}/libs/Windows/libDeepSpeech.so")
+        set(DS_LIBRARY_FILE_NAME "libDeepSpeech.so")
+        add_custom_command(TARGET ${TargetName} POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E copy
+                "${DS_LIBRARY_FILE}"
+                "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${DS_LIBRARY_FILE_NAME}"
+                COMMENT "Copying libDeepSpeech to output directory")
+    elseif(UNIX AND NOT APPLE)
+        set_property(TARGET LibGenisys PROPERTY
+                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.so")
+    endif()
 endif()
 
 target_compile_definitions(${TargetName} PUBLIC
@@ -109,4 +114,13 @@ target_link_libraries(${TargetName} PRIVATE
         gin_dsp
         hack_audio_gui
         ff_meters
-        LibGenisys)
+        #Internally facing testbench
+        GenisysDynamic
+        #Externally facing testbench
+        #LibGenisys
+        )
+
+set_source_files_properties(
+        ${RESOURCE_FILES}
+        PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources)

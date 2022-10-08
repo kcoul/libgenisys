@@ -81,7 +81,6 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
     meter.setMeterSource (&meterSource);
     addAndMakeVisible (meter);
 
-
     addAndMakeVisible (midiInputListLabel);
     midiInputListLabel.setText ("MIDI Input:", juce::dontSendNotification);
     midiInputListLabel.attachToComponent (&midiInputList, true);
@@ -126,14 +125,14 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
     midiMessagesBox.setColour (juce::TextEditor::outlineColourId, juce::Colour (0x1c000000));
     midiMessagesBox.setColour (juce::TextEditor::shadowColourId, juce::Colour (0x16000000));
 
-    auto parent = juce::File::getCurrentWorkingDirectory();
-    testFile = parent.getChildFile("scripts").getChildFile("OpenProTools.wav");
-    loadTestFile(testFile);
+    loadOpenTestFile();
+    loadCloseTestFile();
 
+#if JUCE_ANDROID
+    requestMicrophoneAccess(); //Only necessary on Android
+#endif
     setAudioChannels(2,2);
-
     trySetReSpeakerAsDevice();
-    requestMicrophoneAccess();
 }
 
 void MainComponent::requestMicrophoneAccess()
@@ -161,18 +160,67 @@ void MainComponent::trySetReSpeakerAsDevice()
         }
 }
 
-void MainComponent::loadTestFile(juce::File testFile)
+void MainComponent::loadOpenTestFile()
 {
-    juce::AudioFormatReader* reader = formatManager.createReaderFor(testFile);
+    CFURLRef appUrlRef;
+    appUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("OpenProTools.wav"),
+                                        NULL, NULL);
+    const char* ptr = CFStringGetCStringPtr(CFURLGetString(appUrlRef),kCFStringEncodingUTF8);
+    //TODO: Use std::string instead, juce::String is buggy...
+    openTestFilePath = juce::String(ptr);
+    CFRelease(appUrlRef);
+    openTestFilePath = openTestFilePath.trimCharactersAtStart("file:///");
+    openTestFilePath = "/" + openTestFilePath;
+    openTestFile = juce::File(openTestFilePath);
+    juce::AudioFormatReader* reader = formatManager.createReaderFor(openTestFile);
+
     if (reader)
     {
-        loadedAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
-        reader->read(&loadedAudioBuffer, 0, reader->lengthInSamples,
+        openAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
+        reader->read(&openAudioBuffer, 0, reader->lengthInSamples,
                      0, true, true);
 
-        newSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);   // [11]
-        transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
-        transportLoaded = true;
+        openSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);
+        openTransportSource = std::make_unique<juce::AudioTransportSource>();
+        openTransportSource->setSource (openSource.get(), 0, nullptr,
+                                        reader->sampleRate);
+        //logMessage("Loaded: " + openTestFile.getFileName());
+    }
+    else
+    {
+        logMessage("Couldn't open file: " + openTestFile.getFileName());
+    }
+}
+
+void MainComponent::loadCloseTestFile()
+{
+    CFURLRef appUrlRef;
+    appUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("CloseProTools.wav"),
+                                        NULL, NULL);
+    const char* ptr = CFStringGetCStringPtr(CFURLGetString(appUrlRef),kCFStringEncodingUTF8);
+    //TODO: Use std::string instead, juce::String is buggy...
+    closeTestFilePath = juce::String(ptr);
+    CFRelease(appUrlRef);
+    closeTestFilePath = closeTestFilePath.trimCharactersAtStart("file:///");
+    closeTestFilePath = "/" + closeTestFilePath;
+    closeTestFile = juce::File(closeTestFilePath);
+    juce::AudioFormatReader* reader = formatManager.createReaderFor(closeTestFile);
+
+    if (reader)
+    {
+        closeAudioBuffer = juce::AudioBuffer<float>(1, reader->lengthInSamples);
+        reader->read(&closeAudioBuffer, 0, reader->lengthInSamples,
+                     0, true, true);
+
+        closeSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);
+        closeTransportSource = std::make_unique<juce::AudioTransportSource>();
+        closeTransportSource->setSource (closeSource.get(), 0, nullptr,
+                                         reader->sampleRate);
+        //logMessage("Loaded: " + closeTestFile.getFileName());
+    }
+    else
+    {
+        logMessage("Couldn't open file: " + openTestFile.getFileName());
     }
 }
 
@@ -281,7 +329,8 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
         inputResampler->reset();
     }
 
-    transportSource.prepareToPlay (samplesPerBlockExpected, sampleRate);
+    openTransportSource->prepareToPlay (samplesPerBlockExpected, sampleRate);
+    closeTransportSource->prepareToPlay (samplesPerBlockExpected, sampleRate);
 
     meterSource.resize (1, static_cast<int>(sampleRate * 0.1 / samplesPerBlockExpected));
 }
@@ -311,27 +360,41 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
         }
         else if (currentlyPlayingCommandSample)
         {
-            transportSource.getNextAudioBlock(bufferToFill);
-            if (transportSource.hasStreamFinished())
-            {
-                juce::MessageManager::callAsync(
-                        [=] ()
-                        {
-                            transportSource.setPosition(0);
-                            recordButton.setEnabled(true);
-                            stopButton.setEnabled(false);
-                            playButton.setEnabled(true);
-
-                            processAudioFile(testFile, false);
-
-                            auto parent = juce::File::getCurrentWorkingDirectory();
-                            if (testFile.getFileName() == "OpenProTools.wav")
-                                testFile = parent.getChildFile("scripts").getChildFile("CloseProTools.wav");
-                            else if (testFile.getFileName() == "CloseProTools.wav")
-                                testFile = parent.getChildFile("scripts").getChildFile("OpenProTools.wav");
-                            loadTestFile(testFile);
-                        }
-                );
+             if (shouldPlayOpenCommandSample && !openTransportSource->hasStreamFinished())
+             {
+                openTransportSource->getNextAudioBlock(bufferToFill);
+                if (openTransportSource->hasStreamFinished())
+                {
+                    juce::MessageManager::callAsync(
+                            [=]()
+                            {
+                                shouldPlayOpenCommandSample = false;
+                                currentlyPlayingCommandSample = false;
+                                openTransportSource->stop();
+                                openTransportSource->setPosition(0);
+                                stopButtonClicked();
+                                processAudioFile(openTestFile, false);
+                            }
+                    );
+                }
+             }
+             else if (!closeTransportSource->hasStreamFinished())
+             {
+                closeTransportSource->getNextAudioBlock(bufferToFill);
+                if (closeTransportSource->hasStreamFinished())
+                {
+                    juce::MessageManager::callAsync(
+                            [=]()
+                            {
+                                shouldPlayOpenCommandSample = true;
+                                currentlyPlayingCommandSample = false;
+                                closeTransportSource->stop();
+                                closeTransportSource->setPosition(0);
+                                stopButtonClicked();
+                                processAudioFile(closeTestFile, false);
+                            }
+                    );
+                }
             }
         }
         else if (!enablePassthrough)
@@ -340,7 +403,8 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
 
 void MainComponent::releaseResources()
 {
-    transportSource.releaseResources();
+    openTransportSource->releaseResources();
+    closeTransportSource->releaseResources();
 }
 
 void MainComponent::paint (juce::Graphics& g)
@@ -387,11 +451,6 @@ void MainComponent::stopButtonClicked()
     {
         stopRecordingAndConvert();
     }
-    if (currentlyPlayingCommandSample)
-    {
-        transportSource.stop();
-        currentlyPlayingCommandSample = false;
-    }
 
     recordButton.setEnabled(true);
     stopButton.setEnabled(false);
@@ -400,13 +459,20 @@ void MainComponent::stopButtonClicked()
 
 void MainComponent::playButtonClicked()
 {
-    if (transportLoaded)
+    if (shouldPlayOpenCommandSample)
     {
-        transportSource.start();
         currentlyPlayingCommandSample = true;
-        recordButton.setEnabled(false);
-        stopButton.setEnabled(true);
+        openTransportSource->start();
     }
+    else
+    {
+        currentlyPlayingCommandSample = true;
+        closeTransportSource->start();
+    }
+
+    playButton.setEnabled(false);
+    recordButton.setEnabled(false);
+    stopButton.setEnabled(true);
 }
 
 void MainComponent::startRecording()
@@ -583,58 +649,12 @@ void MainComponent::addMessageToList (const juce::MidiMessage& message, const ju
     logMessage (midiMessageString);
 }
 
-void MainComponent::OpenAbletonMac()
-{
-    juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
-    juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
-    juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
-
-    if (ableton11SuiteApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Suite\" to activate'";
-        system(cmd);
-    }
-    else if (ableton11StandardApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Standard\" to activate'";
-        system(cmd);
-    }
-    else if (ableton11IntroApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Intro\" to activate'";
-        system(cmd);
-    }
-}
-
-void MainComponent::CloseAbletonMac()
-{
-    juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
-    juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
-    juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
-
-    if (ableton11SuiteApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Suite\" to quit'";
-        system(cmd);
-    }
-    else if (ableton11StandardApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Standard\" to quit'";
-        system(cmd);
-    }
-    else if (ableton11IntroApp.exists())
-    {
-        const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Intro\" to quit'";
-        system(cmd);
-    }
-}
-
 void MainComponent::OpenLogicMac()
 {
     juce::File logicApp = juce::File("/Applications/Logic Pro X.app");
     if (logicApp.exists())
     {
-        const char *cmd = "osascript -e 'tell application \"Logic Pro X\" to activate'";
+        const char *cmd = "open -g -a \"/Applications/Logic Pro X.app\"";
         system(cmd);
     }
 }
@@ -654,7 +674,7 @@ void MainComponent::OpenProToolsMac()
     juce::File proToolsApp = juce::File("/Applications/Pro Tools.app");
     if (proToolsApp.exists())
     {
-        const char *cmd = "osascript -e 'tell application \"Pro Tools\" to activate'";
+        const char *cmd = "open -g -a \"/Applications/Pro Tools.app\"";
         system(cmd);
     }
 }
@@ -668,5 +688,51 @@ void MainComponent::CloseProToolsMac()
         system(cmd);
     }
 }
+
+    void MainComponent::OpenAbletonMac()
+    {
+        juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
+        juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
+        juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
+
+        if (ableton11SuiteApp.exists())
+        {
+            const char *cmd = "open -g -a \"/Applications/Ableton Live 11 Suite.app\"";
+            system(cmd);
+        }
+        else if (ableton11StandardApp.exists())
+        {
+            const char *cmd = "open -g -a \"/Applications/Ableton Live 11 Standard.app\"";
+            system(cmd);
+        }
+        else if (ableton11IntroApp.exists())
+        {
+            const char *cmd = "open -g -a \"/Applications/Ableton Live 11 Intro.app\"";
+            system(cmd);
+        }
+    }
+
+    void MainComponent::CloseAbletonMac()
+    {
+        juce::File ableton11SuiteApp = juce::File("/Applications/Ableton Live 11 Suite.app");
+        juce::File ableton11StandardApp = juce::File("/Applications/Ableton Live 11 Standard.app");
+        juce::File ableton11IntroApp = juce::File("/Applications/Ableton Live 11 Intro.app");
+
+        if (ableton11SuiteApp.exists())
+        {
+            const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Suite\" to quit'";
+            system(cmd);
+        }
+        else if (ableton11StandardApp.exists())
+        {
+            const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Standard\" to quit'";
+            system(cmd);
+        }
+        else if (ableton11IntroApp.exists())
+        {
+            const char *cmd = "osascript -e 'tell application \"Ableton Live 11 Intro\" to quit'";
+            system(cmd);
+        }
+    }
 
 } // namespace GuiApp

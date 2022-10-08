@@ -4,6 +4,7 @@
 #include "LibGenisysAPI.h"
 #include "Paths.h"
 #include <gin_dsp/gin_dsp.h>
+#include <CoreFoundation/CoreFoundation.h>
 
 namespace GuiApp
 {
@@ -99,24 +100,31 @@ private:
     void processAudioFile(juce::File file, bool deleteAfterRender);
 
     bool currentlyRecordingCommandSample = false;
-    bool transportLoaded = false;
+    bool shouldPlayOpenCommandSample = true;
     bool currentlyPlayingCommandSample = false;
     bool enablePassthrough = false;
 
-    std::unique_ptr<juce::AudioFormatReaderSource> newSource;
-    juce::AudioTransportSource transportSource;
+    std::unique_ptr<juce::AudioFormatReaderSource> openSource;
+    std::unique_ptr<juce::AudioFormatReaderSource> closeSource;
+    std::unique_ptr<juce::AudioTransportSource> openTransportSource;
+    std::unique_ptr<juce::AudioTransportSource> closeTransportSource;
 
     juce::AudioFormatManager formatManager;
     juce::File lastRecording;
-    juce::AudioBuffer<float> loadedAudioBuffer;
+    juce::AudioBuffer<float> openAudioBuffer;
+    juce::AudioBuffer<float> closeAudioBuffer;
 
     juce::TimeSliceThread backgroundThread { "Audio Recorder Thread" };
     std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
     juce::CriticalSection writerLock;
     std::atomic<juce::AudioFormatWriter::ThreadedWriter*> activeWriter { nullptr };
 
-    juce::File testFile;
-    void loadTestFile(juce::File testFile);
+    juce::File openTestFile;
+    juce::String openTestFilePath;
+    juce::File closeTestFile;
+    juce::String closeTestFilePath;
+    void loadOpenTestFile();
+    void loadCloseTestFile();
     void trySetReSpeakerAsDevice();
     void requestMicrophoneAccess();
 
