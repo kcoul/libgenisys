@@ -63,45 +63,14 @@ target_compile_definitions(${TargetName} PRIVATE
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:${TargetName},JUCE_VERSION>"
         JUCE_DISPLAY_SPLASH_SCREEN=0)
 
-if(EXTERNALLY_FACING)
-    add_library(LibGenisys SHARED IMPORTED)
-    if(APPLE)
-        set_property(TARGET LibGenisys PROPERTY
-                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.dylib")
-    elseif(WIN32)
-        set_property(TARGET LibGenisys PROPERTY
-                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
-        set_property(TARGET LibGenisys PROPERTY
-                IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.lib")
-
-        #Copy DLLs to TestBench build directory
-        set(LIBRARY_FILE "${CMAKE_SOURCE_DIR}/cmake-build-debug/GenisysDynamic.dll")
-        set(LIBRARY_FILE_NAME "GenisysDynamic.dll")
-        add_custom_command(TARGET ${TargetName} POST_BUILD
-                COMMAND "${CMAKE_COMMAND}" -E copy
-                "${LIBRARY_FILE}"
-                "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${LIBRARY_FILE_NAME}"
-                COMMENT "Copying library to output directory")
-
-        set(DS_LIBRARY_FILE "${CMAKE_SOURCE_DIR}/libs/Windows/libDeepSpeech.so")
-        set(DS_LIBRARY_FILE_NAME "libDeepSpeech.so")
-        add_custom_command(TARGET ${TargetName} POST_BUILD
-                COMMAND "${CMAKE_COMMAND}" -E copy
-                "${DS_LIBRARY_FILE}"
-                "${CMAKE_CURRENT_BINARY_DIR}/libGenisysTestBench_artefacts/$<CONFIG>/${DS_LIBRARY_FILE_NAME}"
-                COMMENT "Copying libDeepSpeech to output directory")
-    elseif(UNIX AND NOT APPLE)
-        set_property(TARGET LibGenisys PROPERTY
-                IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/cmake-build-debug/libGenisysDynamic.so")
-    endif()
-endif()
-
 target_compile_definitions(${TargetName} PUBLIC
         JUCE_DISABLE_JUCE_VERSION_PRINTING=1)
 
 #=====================
 #TARGET_LINK_LIBRARIES
 #=====================
+
+list(APPEND CMAKE_FRAMEWORK_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${TargetName} PRIVATE
         juce::juce_recommended_config_flags
@@ -114,10 +83,7 @@ target_link_libraries(${TargetName} PRIVATE
         gin_dsp
         hack_audio_gui
         ff_meters
-        #Internally facing testbench
         GenisysDynamic
-        #Externally facing testbench
-        #LibGenisys
         )
 
 set_source_files_properties(

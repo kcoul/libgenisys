@@ -61,7 +61,7 @@ private:
     std::string ProcessFile(ModelState* context, std::string path, bool show_times);
     ds_result LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize, bool extended_output, bool json_output);
 
-    const char* hot_words = "genesis:5,open:3,close:3,pro:3,tools:3,logic:3,live:3";
+    const char* hot_words = "genesis:5,open:3,close:3,pro:3,tools:5,logic:3,live:3";
     //float max_boost = 20.0f; //See: https://deepspeech.readthedocs.io/en/master/HotWordBoosting-Examples.html
     /*
      * Overly positive boost values may cause a word following the boosted hot-word to be split into separate letters.

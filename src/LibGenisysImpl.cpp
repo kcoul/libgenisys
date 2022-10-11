@@ -6,14 +6,25 @@ LibGenisysImpl::LibGenisysImpl()
     //Use the default model (must be done before registering the callback below)
     st = rnnoise_create(NULL);
 
-    int status = DS_CreateModel(PBMM_PATH, &ctx);
+    //CFURLRef pbmmUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(),
+    //                                              CFSTR("deepspeech-0.9.3-models.pbmm"),
+    //                                             NULL, NULL);
+    //const char* pbmmPtr = CFStringGetCStringPtr(CFURLGetString(pbmmUrlRef),kCFStringEncodingUTF8);
+    //int status = DS_CreateModel(pbmmPtr, &ctx);
+    //int status = DS_CreateModel(PBMM_PATH, &ctx);
+    int status = DS_CreateModel("/usr/local/bin/deepspeech-0.9.3-models.pbmm", &ctx);
     if (status != 0)
     {
         /*TODO: Post failure reason */
         return;
     }
 
-    status = DS_EnableExternalScorer(ctx, SCORER_PATH);
+    //CFURLRef scorerUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("deepspeech-0.9.3-models.scorer"),
+    //                                             NULL, NULL);
+    //const char* scorerPtr = CFStringGetCStringPtr(CFURLGetString(scorerUrlRef),kCFStringEncodingUTF8);
+    //status = DS_EnableExternalScorer(ctx, scorerPtr);
+    //status = DS_EnableExternalScorer(ctx, SCORER_PATH);
+    status = DS_EnableExternalScorer(ctx, "/usr/local/bin/deepspeech-0.9.3-models.scorer");
     if (status != 0)
     {
         /*TODO: Report failure reason */

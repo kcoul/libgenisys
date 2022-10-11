@@ -194,8 +194,7 @@ void MainComponent::loadOpenTestFile()
 
 void MainComponent::loadCloseTestFile()
 {
-    CFURLRef appUrlRef;
-    appUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("CloseProTools.wav"),
+    CFURLRef appUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("CloseProTools.wav"),
                                         NULL, NULL);
     const char* ptr = CFStringGetCStringPtr(CFURLGetString(appUrlRef),kCFStringEncodingUTF8);
     //TODO: Use std::string instead, juce::String is buggy...
@@ -583,15 +582,15 @@ void MainComponent::handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int
 
     //C7, default Record/Arm button on Novation LaunchControl XL ||
     //default Stop/Solo/Mute button when in Custom Drum Mode on Novation Launchpad Mini
-    if (midiNoteNumber == 108 || midiNoteNumber == 71) //C7, default Record/Arm button on Novation LaunchControl XL
-    {
+    //if (midiNoteNumber == 108 || midiNoteNumber == 71) //C7, default Record/Arm button on Novation LaunchControl XL
+    //{
         juce::MessageManager::callAsync(
         [=] ()
         {
             recordButtonClicked();
         }
         );
-    }
+    //}
 }
 
 void MainComponent::handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber, float /*velocity*/)
@@ -605,15 +604,15 @@ void MainComponent::handleNoteOff (juce::MidiKeyboardState*, int midiChannel, in
 
     //C7, default Record/Arm button on Novation LaunchControl XL ||
     //default Stop/Solo/Mute button when in Custom Drum Mode on Novation Launchpad Mini
-    if (midiNoteNumber == 108 || midiNoteNumber == 71)
-    {
+    //if (midiNoteNumber == 108 || midiNoteNumber == 71)
+    //{
         juce::MessageManager::callAsync(
         [=] ()
         {
             stopButtonClicked();
         }
         );
-    }
+    //}
 }
 
 void MainComponent::postMessageToList (const juce::MidiMessage& message, const juce::String& source)
