@@ -133,6 +133,10 @@ MainComponent::MainComponent() : keyboardComponent (keyboardState, juce::MidiKey
 #endif
     setAudioChannels(2,2);
     trySetReSpeakerAsDevice();
+
+    auto result = LibGenisysProcessNativeFloat(libGenisysInstance, openAudioBuffer.getWritePointer(0), openAudioBuffer.getNumSamples());
+    if (!result.empty())
+        textDisplay.setText(juce::String(result), juce::dontSendNotification);
 }
 
 void MainComponent::requestMicrophoneAccess()

@@ -81,41 +81,67 @@ LibGenisysStatus LibGenisysImpl::initialize(int expectedBlockSize, int sampleRat
         fprintf(stderr, "Warning: original sample rate (%d) is lower than %dkHz. "
                         "Up-sampling might produce erratic speech recognition.\n", targetSampleRate, (int)sampleRate);
     }
-
-    if (!inputResampler)
+    if (sampleRate != 16000)
     {
-        currentBlockSize = expectedBlockSize;
-        const int resamplerMaxSamples = maxInputSampleRate * 2;
-        inputResampler = std::make_unique<ResamplingFifo>(expectedBlockSize, 1, resamplerMaxSamples);
-    }
-    else if (currentBlockSize != expectedBlockSize)
-    {
-        currentBlockSize = expectedBlockSize;
-        const int resamplerMaxSamples = maxInputSampleRate * 2;
-        inputResampler->setSize(currentBlockSize, 1, resamplerMaxSamples);
-    }
-    if (currentInputSampleRate != sampleRate)
-    {
-        currentInputSampleRate = sampleRate;
-        inputResampler->setResamplingRatio(currentInputSampleRate, targetSampleRate);
-        inputResampler->reset();
-    }
+        if (!inputResampler)
+        {
+            currentBlockSize = expectedBlockSize;
+            const int resamplerMaxSamples = maxInputSampleRate * 2;
+            inputResampler = std::make_unique<ResamplingFifo>(expectedBlockSize, 1, resamplerMaxSamples);
+        } else if (currentBlockSize != expectedBlockSize)
+        {
+            currentBlockSize = expectedBlockSize;
+            const int resamplerMaxSamples = maxInputSampleRate * 2;
+            inputResampler->setSize(currentBlockSize, 1, resamplerMaxSamples);
+        }
+        if (currentInputSampleRate != sampleRate)
+        {
+            currentInputSampleRate = sampleRate;
+            inputResampler->setResamplingRatio(currentInputSampleRate, targetSampleRate);
+            inputResampler->reset();
+        }
+    } else { currentInputSampleRate = sampleRate; } //To bypass resampler at process() time
 
     return LibGenisysStatusOk;
 }
 
 std::string LibGenisysImpl::processFloat(float* buffer, int numSamples)
 {
-    return "";
-}
-
-std::string LibGenisysImpl::processNativeFloat(float* buffer, int numSamples)
-{
-    return "";
+    return "Not yet implemented"; //TODO: rebuffer through resamplingFIFO
 }
 
 std::string LibGenisysImpl::processPath(std::string path)
 {
+
+    return "Not yet implemented"; //TODO: pass entire file through resamplingFIFO and then process it
+}
+
+std::string LibGenisysImpl::processNativeFloat(float* buffer, int numSamples)
+{
+    ds_audio_buffer res = {0};
+    res.buffer_size = numSamples * sizeof(float);
+    res.buffer = (char*)malloc(sizeof(char) * res.buffer_size);
+
+    juce::AudioDataConverters::convertFloatToInt16LE(buffer, res.buffer, numSamples);
+
+    ds_result result = LocalDsSTT(ctx,
+                                  (const short*)res.buffer,
+                                  res.buffer_size / 2,
+                                  extended_metadata,
+                                  json_output);
+    free(res.buffer);
+
+    if (result.string)
+    {
+        printf("%s\n", result.string);
+        auto ret = std::string(result.string);
+
+        //TODO: WIP: Optimize string massaging
+        ret = std::regex_replace(ret, std::regex("^ +| +$|( ) +"), "$1");
+
+        STT_FreeString((char*)result.string);
+        return std::string(ret);
+    }
 
     return "";
 }
@@ -156,18 +182,10 @@ ds_audio_buffer LibGenisysImpl::DeNoiseAudioBuffer(ds_audio_buffer &input)
         denoisingBuffer->setSize(1, input.buffer_size);
 
     juce::AudioDataConverters::convertInt16LEToFloat(input.buffer, denoisingBuffer->getWritePointer(0), input.buffer_size);
-    //for (int i = 0; i < input.buffer_size; i++)
-    //{
-    //    denoisingBuffer->getWritePointer(0)[i] = input.buffer[i] * 32768.0f;
-    //}
 
     rnnoise_process_frame(st, denoisingBuffer->getWritePointer(0), denoisingBuffer->getReadPointer(0));
     
     juce::AudioDataConverters::convertFloatToInt16LE(denoisingBuffer->getReadPointer(0), input.buffer, input.buffer_size);
-    //for (int i = 0; i < input.buffer_size; i++)
-    //{
-    //    input.buffer[i] = juce::jmax<float>(-32768, juce::jmin<float>(32767, denoisingBuffer->getReadPointer(0)[i])) * (1.0f / 32768.0f);
-    //}
 
     return input;
 }

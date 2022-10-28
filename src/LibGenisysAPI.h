@@ -45,19 +45,6 @@ LibGenisysStatus EXPORT LibGenisysInitialize(LibGenisysInstance instance,
                                              int sampleRate);
 
 /**
- * Resamples an audio buffer and runs it through DeepSpeech
- *
- * @param instance the library instance
- * @param audioBuffer the audio buffer
- * @param numberOfSamples the number of samples
- *
- * @returns the interpreted text string, if any
- */
-std::string EXPORT LibGenisysProcessFloat(LibGenisysInstance instance,
-                                          float* audioBuffer,
-                                          int numberOfSamples);
-
-/**
  * Runs a 16kHz audio buffer through DeepSpeech
  *
  * @param instance the library instance
@@ -69,18 +56,6 @@ std::string EXPORT LibGenisysProcessFloat(LibGenisysInstance instance,
 std::string EXPORT LibGenisysProcessNativeFloat(LibGenisysInstance instance,
                                                 float* nativeAudioBuffer,
                                                 int numberOfSamples);
-
-/**
- * Loads a file to audio buffer, resamples it and runs it through DeepSpeech
- *
- * @param instance the library instance
- * @param audioBuffer the audio buffer
- * @param numberOfSamples the number of samples
- *
- * @returns the interpreted text string, if any
- */
-std::string EXPORT LibGenisysProcessPath(LibGenisysInstance instance,
-                                         const char* audioFilePath);
 
 /**
  * Loads a 16kHz file to audio buffer, and runs it through DeepSpeech
@@ -100,3 +75,30 @@ std::string EXPORT LibGenisysProcessNativePath(LibGenisysInstance instance,
  * @param instance the instance
  */
 void EXPORT LibGenisysDestroy(LibGenisysInstance instance);
+
+//Not yet implemented
+
+/**
+ * Resamples an audio buffer and runs it through DeepSpeech
+ *
+ * @param instance the library instance
+ * @param audioBuffer the audio buffer
+ * @param numberOfSamples the number of samples
+ *
+ * @returns the interpreted text string, if any
+ */
+std::string EXPORT LibGenisysProcessFloat(LibGenisysInstance instance,
+                                          float* audioBuffer,
+                                          int numberOfSamples);
+
+/**
+ * Loads a file to audio buffer, resamples it and runs it through DeepSpeech
+ *
+ * @param instance the library instance
+ * @param audioBuffer the audio buffer
+ * @param numberOfSamples the number of samples
+ *
+ * @returns the interpreted text string, if any
+ */
+std::string EXPORT LibGenisysProcessPath(LibGenisysInstance instance,
+                                         const char* audioFilePath);
