@@ -6,25 +6,42 @@ LibGenisysImpl::LibGenisysImpl()
     //Use the default model (must be done before registering the callback below)
     st = rnnoise_create(NULL);
 
-    //CFURLRef pbmmUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(),
-    //                                              CFSTR("deepspeech-0.9.3-models.pbmm"),
-    //                                             NULL, NULL);
-    //const char* pbmmPtr = CFStringGetCStringPtr(CFURLGetString(pbmmUrlRef),kCFStringEncodingUTF8);
-    //int status = DS_CreateModel(pbmmPtr, &ctx);
-    //int status = DS_CreateModel(PBMM_PATH, &ctx);
-    int status = DS_CreateModel("/usr/local/bin/deepspeech-0.9.3-models.pbmm", &ctx);
+//TODO: we probably only need the DEBUG_PATH and an INSTALL_PATH, but need to make a macOS installer to start with
+//TODO: Use Packages as in the past: http://s.sudre.free.fr/Software/Packages/about.html
+
+//TODO: Additionally, we can now use int
+//STT_CreateModelFromBuffer(const char* aModelBuffer,
+//                          unsigned int aBufferSize,
+//                          ModelState** retval)
+//TODO: to load a model and scorer embedded in the binary itself, which is probably the way to go
+
+#if DEBUG_PATH
+    int status = STT_CreateModel(TFLITE_PATH, &ctx);
+#elseif BUNDLE_PATH
+    CFURLRef tfliteUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(),
+                                                  CFSTR("model.tflite"),
+                                                 NULL, NULL);
+    const char* tflitePtr = CFStringGetCStringPtr(CFURLGetString(tfliteUrlRef),kCFStringEncodingUTF8);
+    int status = STT_CreateModel(tflitePtr, &ctx);
+#else
+    int status = STT_CreateModel("/usr/local/bin/model.tflite", &ctx);
+#endif
     if (status != 0)
     {
         /*TODO: Post failure reason */
         return;
     }
 
-    //CFURLRef scorerUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("deepspeech-0.9.3-models.scorer"),
-    //                                             NULL, NULL);
-    //const char* scorerPtr = CFStringGetCStringPtr(CFURLGetString(scorerUrlRef),kCFStringEncodingUTF8);
-    //status = DS_EnableExternalScorer(ctx, scorerPtr);
-    //status = DS_EnableExternalScorer(ctx, SCORER_PATH);
-    status = DS_EnableExternalScorer(ctx, "/usr/local/bin/deepspeech-0.9.3-models.scorer");
+#if DEBUG_PATH
+    status = STT_EnableExternalScorer(ctx, SCORER_PATH);
+#elseif BUNDLE_PATH
+    CFURLRef scorerUrlRef = CFBundleCopyResourceURL(CFBundleGetMainBundle(), CFSTR("coqui-stt-0.9.3-models.scorer"),
+                                                 NULL, NULL);
+    const char* scorerPtr = CFStringGetCStringPtr(CFURLGetString(scorerUrlRef),kCFStringEncodingUTF8);
+    status = STT_EnableExternalScorer(ctx, scorerPtr);
+#else
+    status = STT_EnableExternalScorer(ctx, "/usr/local/bin/coqui-stt-0.9.3-models.scorer");
+#endif
     if (status != 0)
     {
         /*TODO: Report failure reason */
@@ -42,7 +59,7 @@ LibGenisysImpl::LibGenisysImpl()
             // so, check the boost string before we turn it into a float
             bool boost_is_valid = (pair_[1].find_first_not_of("-.0123456789") == std::string::npos);
             float boost = strtof((pair_[1]).c_str(),0);
-            status = DS_AddHotWord(ctx, word, boost);
+            status = STT_AddHotWord(ctx, word, boost);
             if (status != 0 || !boost_is_valid)
             {
                 /*TODO: Report failure reason */
@@ -179,7 +196,7 @@ std::string LibGenisysImpl::ProcessFile(ModelState* context, std::string path, b
         //TODO: WIP: Optimize string massaging
         ret = std::regex_replace(ret, std::regex("^ +| +$|( ) +"), "$1");
 
-        DS_FreeString((char*)result.string);
+        STT_FreeString((char*)result.string);
         return std::string(ret);
     }
 
@@ -200,22 +217,22 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
     // sphinx-doc: c_ref_inference_start
     if (extended_output)
     {
-        Metadata *result = DS_SpeechToTextWithMetadata(aCtx, aBuffer, (unsigned int)aBufferSize, 1);
+        Metadata *result = STT_SpeechToTextWithMetadata(aCtx, aBuffer, (unsigned int)aBufferSize, 1);
         res.string = CandidateTranscriptToString(&result->transcripts[0]);
-        DS_FreeMetadata(result);
+        STT_FreeMetadata(result);
     }
     else if (json_output)
     {
-        Metadata *result = DS_SpeechToTextWithMetadata(aCtx, aBuffer, (unsigned int)aBufferSize, json_candidate_transcripts);
+        Metadata *result = STT_SpeechToTextWithMetadata(aCtx, aBuffer, (unsigned int)aBufferSize, json_candidate_transcripts);
         res.string = MetadataToJSON(result);
-        DS_FreeMetadata(result);
+        STT_FreeMetadata(result);
     }
     else if (stream_size > 0)
     {
         StreamingState* ctx;
-        int status = DS_CreateStream(aCtx, &ctx);
+        int status = STT_CreateStream(aCtx, &ctx);
 
-        if (status != DS_ERR_OK)
+        if (status != STT_ERR_OK)
         {
             res.string = strdup("");
             return res;
@@ -228,10 +245,10 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
         while (off < aBufferSize)
         {
             size_t cur = aBufferSize - off > stream_size ? stream_size : aBufferSize - off;
-            DS_FeedAudioContent(ctx, aBuffer + off, (unsigned int)cur);
+            STT_FeedAudioContent(ctx, aBuffer + off, (unsigned int)cur);
             off += cur;
             prev = last;
-            const char* partial = DS_IntermediateDecode(ctx);
+            const char* partial = STT_IntermediateDecode(ctx);
 
             if (last == nullptr || strcmp(last, partial))
             {
@@ -240,28 +257,28 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
             }
             else
             {
-                DS_FreeString((char *) partial);
+                STT_FreeString((char *) partial);
             }
 
             if (prev != nullptr && prev != last)
             {
-                DS_FreeString((char *) prev);
+                STT_FreeString((char *) prev);
             }
         }
 
         if (last != nullptr)
         {
-            DS_FreeString((char *) last);
+            STT_FreeString((char *) last);
         }
 
-        res.string = DS_FinishStream(ctx);
+        res.string = STT_FinishStream(ctx);
     }
     else if (extended_stream_size > 0)
     {
         StreamingState* ctx;
-        int status = DS_CreateStream(aCtx, &ctx);
+        int status = STT_CreateStream(aCtx, &ctx);
 
-        if (status != DS_ERR_OK)
+        if (status != STT_ERR_OK)
         {
             res.string = strdup("");
             return res;
@@ -274,10 +291,10 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
         while (off < aBufferSize)
         {
             size_t cur = aBufferSize - off > extended_stream_size ? extended_stream_size : aBufferSize - off;
-            DS_FeedAudioContent(ctx, aBuffer + off, (unsigned int)cur);
+            STT_FeedAudioContent(ctx, aBuffer + off, (unsigned int)cur);
             off += cur;
             prev = last;
-            const Metadata* result = DS_IntermediateDecodeWithMetadata(ctx, 1);
+            const Metadata* result = STT_IntermediateDecodeWithMetadata(ctx, 1);
             const char* partial = CandidateTranscriptToString(&result->transcripts[0]);
 
             if (last == nullptr || strcmp(last, partial))
@@ -294,17 +311,17 @@ ds_result LibGenisysImpl::LocalDsSTT(ModelState* aCtx, const short* aBuffer, siz
             {
                 free((char *) prev);
             }
-            DS_FreeMetadata((Metadata *)result);
+            STT_FreeMetadata((Metadata *)result);
         }
 
-        const Metadata* result = DS_FinishStreamWithMetadata(ctx, 1);
+        const Metadata* result = STT_FinishStreamWithMetadata(ctx, 1);
         res.string = CandidateTranscriptToString(&result->transcripts[0]);
-        DS_FreeMetadata((Metadata *)result);
+        STT_FreeMetadata((Metadata *)result);
         free((char *) last);
     }
     else
     {
-        res.string = DS_SpeechToText(aCtx, aBuffer, (unsigned int)aBufferSize);
+        res.string = STT_SpeechToText(aCtx, aBuffer, (unsigned int)aBufferSize);
     }
     // sphinx-doc: c_ref_inference_stop
     clock_t ds_end_infer = clock();

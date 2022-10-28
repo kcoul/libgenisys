@@ -22,11 +22,15 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+set(MODULE_TAG "[LIB-GENISYS]")
+
+message("${MODULE_TAG} building for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+
 #
 # 3. Dependencies
 #
 include(CMake/CPM.cmake)
-find_package(DeepSpeech)
+find_package(CoquiSTT)
 find_package(JUCE)
 find_package(Gin)
 
@@ -36,14 +40,12 @@ find_package(Gin)
 add_library(GenisysDynamic SHARED)
 
 set(RESOURCE_FILES
-		LFS/deepspeech-0.9.3-models.pbmm
-		LFS/deepspeech-0.9.3-models.tflite
-		LFS/deepspeech-0.9.3-models.scorer
+		LFS/model.tflite
+		LFS/coqui-stt-0.9.3-models.scorer
 		)
 
-set(PBMM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.pbmm")
-set(TFLITE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.tflite")
-set(SCORER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/deepspeech-0.9.3-models.scorer")
+set(TFLITE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/model.tflite")
+set(SCORER_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LFS/coqui-stt-0.9.3-models.scorer")
 
 target_sources(GenisysDynamic PRIVATE
 		src/LibGenisysAPI.cpp
@@ -56,7 +58,7 @@ target_sources(GenisysDynamic PRIVATE
 target_compile_features(GenisysDynamic PUBLIC cxx_std_14)
 
 target_include_directories(GenisysDynamic PUBLIC
-		"${DeepSpeech_SOURCE_DIR}/native_client"
+		"${Coqui_SOURCE_DIR}/native_client"
 		libgenisys-dsp
 		include
 		)
@@ -65,22 +67,42 @@ target_compile_definitions(GenisysDynamic PUBLIC
 		JUCE_WEB_BROWSER=0
 		JUCE_USE_CURL=0
 		JUCE_DISABLE_JUCE_VERSION_PRINTING=1
-		"PBMM_PATH=\"${PBMM_PATH}\""
 		"TFLITE_PATH=\"${TFLITE_PATH}\""
 		"SCORER_PATH=\"${SCORER_PATH}\"")
 
-add_library(DeepSpeechPrecompiled SHARED IMPORTED)
-if (APPLE)
-	set_property(TARGET DeepSpeechPrecompiled PROPERTY
-			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/libdeepspeech.so")
-elseif(WIN32)
-	set_property(TARGET DeepSpeechPrecompiled PROPERTY
-			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Windows/libdeepspeech.so")
-	set_property(TARGET DeepSpeechPrecompiled PROPERTY
-			IMPORTED_IMPLIB "${PROJECT_SOURCE_DIR}/libs/Windows/libdeepspeech.so.if.lib")
-elseif(UNIX AND NOT APPLE)
-	set_property(TARGET DeepSpeechPrecompiled PROPERTY
-			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Linux/libdeepspeech.so")
+add_library(CoquiSTT SHARED IMPORTED)
+add_library(KenLM SHARED IMPORTED)
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+	set_property(TARGET CoquiSTT PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/libstt.so")
+	set_property(TARGET KenLM PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/macOS/libkenlm.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+	set_property(TARGET CoquiSTT PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Windows/libstt.so")
+	set_property(TARGET CoquiSTT PROPERTY
+			IMPORTED_IMPLIB "${PROJECT_SOURCE_DIR}/libs/Windows/libstt.so.if.lib")
+	set_property(TARGET KenLM PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Windows/libkenlm.so")
+	set_property(TARGET KenLM PROPERTY
+			IMPORTED_IMPLIB "${PROJECT_SOURCE_DIR}/libs/Windows/libkenlm.so.if.lib")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	set_property(TARGET CoquiSTT PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Linux/libstt.so")
+	set_property(TARGET KenLM PROPERTY
+			IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Linux/libkenlm.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
+	if (ANDROID_ABI MATCHES "^(arm64-v8a)$") #ANDROID_ABI is set when invoking via Android toolchain
+		set_property(TARGET CoquiSTT PROPERTY
+				IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Android/aarch64/libstt.so")
+		set_property(TARGET KenLM PROPERTY
+				IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Android/aarch64/libkenlm.so")
+	elseif(ANDROID_ABI MATCHES "^(armeabi-v7a)$")
+		set_property(TARGET CoquiSTT PROPERTY
+				IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Android/armv7/libstt.so")
+		set_property(TARGET KenLM PROPERTY
+				IMPORTED_LOCATION "${PROJECT_SOURCE_DIR}/libs/Android/armv7/libkenlm.so")
+	endif()
 endif()
 
 add_library(RNNoise STATIC IMPORTED)
@@ -97,7 +119,8 @@ endif()
 
 target_link_libraries(GenisysDynamic
 		PRIVATE
-		DeepSpeechPrecompiled
+		CoquiSTT
+		KenLM
 		wavio
 		libGenisysDSP
 		RNNoise
@@ -110,6 +133,7 @@ if (APPLE)
 			)
 endif()
 
+#TODO: Building a .framework seems to be a requirement on iOS, bare .dylibs aren't allowed
 #set_target_properties(GenisysDynamic PROPERTIES
 #		FRAMEWORK TRUE
 #		FRAMEWORK_VERSION A

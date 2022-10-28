@@ -1,6 +1,6 @@
 #pragma once
 
-#include "deepspeech.h"
+#include "coqui-stt.h"
 #include "rnnoise.h"
 #include "wavio.h"
 
